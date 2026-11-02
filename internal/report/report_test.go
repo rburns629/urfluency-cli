@@ -10,7 +10,6 @@ import (
 	"github.com/rburns629/urfluency-cli/analysis"
 	_ "github.com/rburns629/urfluency-cli/analyzers/golang"
 	"github.com/rburns629/urfluency-cli/facts"
-	"github.com/rburns629/urfluency-cli/internal/sessions"
 )
 
 func result(owned int, rules ...string) analysis.Result {
@@ -132,12 +131,12 @@ func TestBuildSplitsAuthorship(t *testing.T) {
 }
 
 func TestBuildPrompting(t *testing.T) {
-	g := sessions.Grades{Sessions: 3, Tasks: map[string]int{"feature": 6, "bug": 4}, Rules: map[string]sessions.Tally{
+	g := facts.Sessions{Sessions: 3, Tasks: map[string]int{"feature": 6, "bug": 4}, Rules: map[string]facts.Tally{
 		"prompt.unverified-change": {Applicable: 8, Missed: 5},
 		"prompt.needed-correction": {Applicable: 10, Missed: 1},
 		"prompt.retired-rule":      {Applicable: 10, Missed: 9}, // not in the catalog, so ignored
 	}}
-	p := BuildPrompting(facts.FromGrades(g))
+	p := BuildPrompting(g)
 	if len(p.Rules) != 2 || len(p.Weaknesses) != 1 || p.Weaknesses[0].ID != "prompt.unverified-change" || p.Weaknesses[0].Share != 0.63 {
 		t.Errorf("weaknesses = %+v", p.Weaknesses)
 	}
