@@ -331,7 +331,7 @@ func buildReport(ctx context.Context, sf *scanFlags, path string, withLocations 
 	if *sf.sessions {
 		g := sessions.Grade(graded)
 		grades = &g
-		r.Prompting = report.BuildPrompting(g)
+		r.Prompting = report.BuildPrompting(facts.FromGrades(g))
 	}
 	f := facts.New(res, folderRes, grades)
 	r.Facts = &f

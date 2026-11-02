@@ -8,7 +8,7 @@ import (
 	"strings"
 
 	"github.com/rburns629/urfluency-cli/analysis"
-	"github.com/rburns629/urfluency-cli/internal/sessions"
+	"github.com/rburns629/urfluency-cli/facts"
 	"github.com/rburns629/urfluency-cli/rules"
 )
 
@@ -72,7 +72,7 @@ var communicationTraits = []struct {
 	{"verification", "Asks for tests or checks", 0.2},
 }
 
-func buildCommunication(g sessions.Grades) *Communication {
+func buildCommunication(g facts.Sessions) *Communication {
 	tasks := 0
 	for _, n := range g.Tasks {
 		tasks += n

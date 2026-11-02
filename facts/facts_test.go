@@ -58,14 +58,14 @@ func scan(t *testing.T) analysis.Result {
 }
 
 // build makes the parts of a report an upload carries, as the CLI does.
-func build(git analysis.Result, grades *sessions.Grades) []byte {
+func build(git analysis.Result, s *facts.Sessions) []byte {
 	r := report.Build(git, since, false)
 	r.Combined = report.BuildCombined(git, analysis.Result{})
-	if grades != nil {
-		r.Prompting = report.BuildPrompting(*grades)
+	if s != nil {
+		r.Prompting = report.BuildPrompting(*s)
 	}
 	if git.OwnedLines > 0 {
-		r.AI = report.BuildAI(git, grades != nil)
+		r.AI = report.BuildAI(git, s != nil)
 		r.AIEngineering = report.BuildAIEngineering(r)
 		r.Practices = report.BuildPractices(git)
 	}
@@ -98,8 +98,8 @@ func TestFactsScoreLikeTheScan(t *testing.T) {
 	if back.Git == nil || back.Folders != nil || back.Sessions == nil {
 		t.Fatalf("facts parts: git %v, folders %v, sessions %v", back.Git != nil, back.Folders != nil, back.Sessions != nil)
 	}
-	g := back.Sessions.Grades()
-	want, got := build(res, grades), build(back.Git.Result(), &g)
+	sessions := facts.FromGrades(*grades)
+	want, got := build(res, &sessions), build(back.Git.Result(), back.Sessions)
 	if !bytes.Equal(want, got) {
 		t.Errorf("scored from facts:\n%s\nscored from the scan:\n%s", got, want)
 	}
