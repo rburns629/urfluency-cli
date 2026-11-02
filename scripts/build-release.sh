@@ -36,7 +36,7 @@ Linux)
   ;;
 esac
 
-cp LICENSE README.md "$work/"
+cp LICENSE.md README.md "$work/"
 archive="urfluency_${version}_${goos}_${goarch}.tar.gz"
-tar -C "$work" -czf "$out/$archive" urfluency LICENSE README.md
+tar -C "$work" -czf "$out/$archive" urfluency LICENSE.md README.md
 echo "$out/$archive"
