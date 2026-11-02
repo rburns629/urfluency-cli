@@ -9,6 +9,10 @@ sums up the release in one line. Each change is a bullet that starts with
 `New:`, `Improved:`, `Fixed:`, or `Security:`, written for people who use the
 CLI rather than for people who work on it.
 
+## v1.0.2 (2026-11-02)
+
+- Fixed: Projects without Git that hold no code, only files such as a Dockerfile, are counted in an upload's facts, with their tools, so the official score counts them as the local estimate does.
+
 ## v1.0.1 (2026-11-02)
 
 Official scores, and a new home and license. Uploads need this version or later.
