@@ -1,0 +1,203 @@
+# Release notes
+
+What changed in each release of the urFluency CLI, newest first. The release
+workflow publishes a version's section as its GitHub release, and the website
+shows it at urfluency.com/about/releases.
+
+Each section is headed `## vX.Y.Z (YYYY-MM-DD)`. An optional first paragraph
+sums up the release in one line. Each change is a bullet that starts with
+`New:`, `Improved:`, `Fixed:`, or `Security:`, written for people who use the
+CLI rather than for people who work on it.
+
+## v1.0.0 (2026-11-02)
+
+Official scores, and a new home and license. Uploads need this version or later.
+
+- New: Uploads carry the counts behind your ratings, and urfluency.com scores them with its official model. Your profile and badges show the official score; when the model improves, your profile is rescored without uploading again.
+- New: The CLI's own scores are labelled a local estimate. Its open model may differ from the official one by a few points, and sometimes by a level.
+- Improved: The CLI now lives at rburns629/urfluency-cli, under the Functional Source License (FSL-1.1-MIT): use, change, and share it for anything but a competing product, and each version becomes MIT two years after its release. Versions before 1.0.0 stay MIT.
+- Improved: Earlier versions can no longer upload. Upgrade with `brew upgrade urfluency`.
+
+## v0.4.1 (2026-11-02)
+
+Connections show which machine they came from.
+
+- New: `urfluency login` sends this machine's name, so your account can tell your connections apart.
+- New: Set `URFLUENCY_DEVICE_NAME` to choose the name, or set it empty to send none.
+
+## v0.4.0 (2026-11-01)
+
+A hardening release: a stricter safety check, fewer false findings, and Go 1.27.3.
+
+- Security: The safety check reads install files first, every install hook, encoded scripts, HTML, and dependency folders committed to a repository, and closes four ways to hide a payload from its line rules.
+- Security: A safety check that cannot read a folder or does not finish reports an error, never a clean result.
+- Security: Clones stop once their download or file count passes a limit, and repository URLs with escaped characters are refused.
+- Security: The CLI never follows a redirect to another site with your token, and refuses a login without an expiry.
+- Security: Uploads are checked for identifying data in keys and version fields.
+- Security: Text from scanned repositories is printed with control characters escaped.
+- Security: Scans never read protected files such as certificates, however their names are capitalized.
+- Improved: Each file is analyzed on its own within a time budget, so one hard file cannot stall a scan.
+- Improved: Secret detection catches prefixed names and unquoted config values.
+- Improved: Quality gates are scored against the gates that apply to each project.
+- Improved: `vulns` asks before downloading a database, and never reads one from the current folder.
+- Improved: Report format 0.5 and rule catalog 0.13.
+- Improved: Built with Go 1.27.3. Release builds record their build image and carry provenance attestations.
+- Fixed: Misreadings in the C++, Rust, Java, Go, C#, Shell, PowerShell, and Python analyzers, and a crash on `exec.CommandContext()` with no arguments.
+- Fixed: Python local versions match vulnerability ranges, and suggested upgrades are compared the way each registry orders versions.
+
+## v0.3.4 (2026-10-31)
+
+- New: The report shows how much code you wrote each month, yours and AI-assisted.
+
+## v0.3.3 (2026-10-31)
+
+- New: `urfluency status` shows whether you are logged in, when the login expires, and your plan.
+- Improved: A clear message when you reach your upload limit, and a note about Pro after an upload.
+- Fixed: The safety check no longer reports rule patterns and test data as findings.
+
+## v0.3.2 (2026-10-31)
+
+- Fixed: Each persona role's code rating is named `code_rating` in the JSON report.
+
+## v0.3.1 (2026-10-30)
+
+- Improved: Persona roles weigh code quality and how recent the work is, rank by breadth, show a timeline for each role, and name work that spans the stack.
+
+## v0.3.0 (2026-10-30)
+
+Personas, platform experience, PHP and Ruby, and vulnerable dependencies.
+
+- New: A persona built from your ratings: the kinds of roles your work fits.
+- New: Platform experience, rated from SDK imports and deploy files.
+- New: PHP and Ruby ratings.
+- New: `scan` and `check` look up your locked dependency versions in OSV, online or offline, and flag PHP versions affected by PHP2Shell.
+- New: Next steps that would raise each rating, with the rating they predict.
+- Security: The safety check finds PHP and Ruby web shells, decoded evals, and install hooks.
+- Fixed: Offline vulnerability matching, lockfile size limits, and the checks for SQL arguments and `YAML.load`.
+
+## v0.2.15 (2026-10-30)
+
+- Improved: The safety check uses every CPU core.
+
+## v0.2.14 (2026-10-30)
+
+- Improved: No change to how the CLI works. Releases are now made by one workflow from `main`.
+
+## v0.2.13 (2026-10-30)
+
+- Improved: Faster scans: files are read through one `git cat-file` process instead of one `git show` per file.
+
+## v0.2.12 (2026-10-30)
+
+- Improved: Big shallow clones are rated faster.
+- Improved: `dismiss` help says where to find a finding's rule id: `scan --json --locations`.
+
+## v0.2.11 (2026-10-29)
+
+- Security: Private repositories are cloned with the access token passed through Git's environment.
+
+## v0.2.10 (2026-10-29)
+
+- Improved: Parsing each file is limited to 2 seconds.
+
+## v0.2.9 (2026-10-29)
+
+- Security: Memory-safety fixes in the Swift parser, taken from upstream.
+
+## v0.2.8 (2026-10-29)
+
+- New: Shell (Bash) and PowerShell ratings.
+- Improved: A finding names the framework its rule checks.
+- Security: Stricter clones, with a size check before checkout, and each parse bounded by time and nesting depth.
+
+## v0.2.7 (2026-10-29)
+
+- New: Detects more frameworks and tools.
+
+## v0.2.6 (2026-10-29)
+
+- New: `--no-git` for `scan` and `upload` reads repositories as plain folders.
+- Improved: Grouped help, help for each command, and short usage errors.
+- Fixed: Secrets count only while they are still in the working copy.
+
+## v0.2.5 (2026-10-29)
+
+- Fixed: A lowercase word is no longer reported as a hard-coded secret.
+
+## v0.2.4 (2026-10-29)
+
+- Fixed: `dismiss` accepts `--reason` and `--undo` after its arguments.
+
+## v0.2.3 (2026-10-29)
+
+- New: `dismiss` hides findings that are not real problems.
+- Fixed: AWS's documented example keys are not reported as secrets.
+
+## v0.2.2 (2026-10-29)
+
+- Improved: Generated scaffolding is skipped, small samples are capped at Beginner, and `upload` explains what it sends.
+
+## v0.2.1 (2026-10-28)
+
+- New: `attest` connects a repository with a link code, no GitHub App needed.
+
+## v0.2.0 (2026-10-28)
+
+Ratings for whole repositories.
+
+- New: Rate a whole repository for badges, with a GitHub Action for private repositories.
+- Security: Clones are tested against hostile repositories, and hosted scans keep nothing.
+
+## v0.1.9 (2026-10-28)
+
+- New: `urfluency check`, a safety check for a repository before you run it.
+
+## v0.1.8 (2026-10-28)
+
+- New: `login`, `upload`, and `logout`, to share your ratings on urfluency.com.
+
+## v0.1.7 (2026-10-28)
+
+- Improved: Design areas are scaled by how widely you use them, and Pub/Sub is found without client imports.
+
+## v0.1.6 (2026-10-28)
+
+- Improved: All your work is scored as one combined result.
+
+## v0.1.5 (2026-10-27)
+
+Eight more languages and a strengths-first summary.
+
+- New: C, C++, C#, Java, Kotlin, Rust, Swift, and Dart ratings.
+- New: A strengths-first summary with a rating for every area.
+- Fixed: Firebase web config API keys are not reported as secrets.
+
+## v0.1.4 (2026-10-27)
+
+- New: A proficiency score for each language, from the idioms you use and the findings in your code.
+- Improved: Only supported languages are read by default.
+
+## v0.1.3 (2026-10-27)
+
+- New: `urfluency init` confirms and saves the addresses you commit with.
+- Improved: Finds your commits without a list of email addresses, and leaves out third-party and build files.
+
+## v0.1.2 (2026-10-27)
+
+- New: Scans project folders that have no Git history.
+- Fixed: Blame reads only the files you touched, and GitHub noreply addresses match.
+
+## v0.1.1 (2026-10-27)
+
+- Improved: Shows scan progress, and large folders no longer stall a scan.
+
+## v0.1.0 (2026-10-27)
+
+First release.
+
+- New: `urfluency scan` rates your Go, Python, TypeScript, and JavaScript from your own commits, on your machine.
+- New: Security findings, framework rules, cognitive complexity, and durability: how much of your code needed a fix soon after it was written.
+- New: How AI-assisted work holds up, and how you brief agents, from local agent sessions. Counts only.
+- New: Testing, CI, and quality-gate habits.
+- New: `urfluency doctor` checks the tools the CLI uses, without installing anything.
+- New: Install with Homebrew.

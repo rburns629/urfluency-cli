@@ -1,0 +1,335 @@
+# urFluency
+
+Rates the code you write, in 16 languages, and how you work with coding agents,
+from your own Git history. It runs on your machine: your code and prompts never
+leave it. It also checks repositories for malicious code before you run them.
+
+- **Your ratings:** `urfluency scan` rates each language you write, the frameworks,
+  tools, and kinds of systems you build, your ways of working, and, with
+  `--sessions`, how you brief coding agents. Strengths come first, with what to
+  practice next.
+- **A profile and badges (optional):** `urfluency upload` sends the ratings, never
+  code, to a profile on [urfluency.com](https://urfluency.com) that you choose to
+  publish, with badges for your README and a card for your portfolio site.
+- **Repository ratings:** connect a repository on urfluency.com to rate everyone's
+  code in it and show its badges: through the urFluency GitHub App, or the
+  GitHub Action (`urfluency attest`), which rates it in your own CI.
+- **Safety checks:** `urfluency check` looks for malicious or privacy-invasive
+  behavior in a repository without running it, locally and at no cost. The same
+  engine runs the hosted scanner at [urfluency.com/scan](https://urfluency.com/scan).
+
+The CLI is free, and its source is open to read under the Functional Source
+License: the analyzers, the rule catalog, and the local scoring model are all
+here. Hosted scans beyond the free ones are paid; see
+[pricing](https://urfluency.com/pricing). Documentation:
+[urfluency.com/docs](https://urfluency.com/docs). Design notes: [DESIGN.md](DESIGN.md).
+
+## Install
+
+```sh
+brew install rburns629/tap/urfluency    # macOS and Linux; installs Git if missing
+urfluency doctor                        # checks dependencies; installs nothing
+```
+
+Release archives for macOS (Apple Silicon and Intel, macOS 13+) and Linux (x86-64
+and ARM, static binaries) are also attached to each
+[GitHub Release](https://github.com/rburns629/urfluency-cli/releases) with a
+`checksums.txt`. To build from source you need Go 1.27.3 or later, a C compiler
+(for tree-sitter), and Git: `go build -o urfluency ./cmd/urfluency`.
+
+`urfluency doctor` checks Git by capability, lists the agent sessions `--sessions`
+would read, and looks for a local model runtime. It never installs anything; it
+prints the official install command for whatever is missing.
+
+## Scan your code
+
+```sh
+urfluency scan /path/to/your/repo              # finds your commits automatically
+urfluency scan --since 90d --locations .
+urfluency scan --json .
+urfluency scan --sessions ~/Projects           # every repo below, plus your agent prompts
+urfluency scan --exclude 'Archive*' ~/Projects # skip folders by name or relative path
+```
+
+The scan analyzes only lines that `git blame` attributes to your emails at the
+latest commit, never runs the repository's code, and writes nothing to disk.
+Progress (the repository and stage it is on) goes to stderr, so `--json` output stays
+clean. Files over 2 MB are skipped before anything reads them, since they are
+vendored or generated, and a file that takes more than 60 seconds to attribute is
+skipped and counted in the report, as is a file that takes more than 5 seconds to
+analyze. Third-party code is left out even when it was
+committed: files `.gitattributes` marks `linguist-vendored` or `linguist-generated`,
+and JavaScript or TypeScript libraries recognized by a `/*!` or `@license` banner,
+a `.bundle.` or `.min.` name, or a `plugins`, `lib`, or `vendor` folder under
+`public`, `static`, or `assets`.
+`--locations` adds `file:line` for each finding; locations are never uploaded.
+
+You don't list your email addresses. urFluency starts from your Git name and
+email and your account's full name, then follows history: an address you
+committed under with one of your names is yours, and so is a name you used with
+one of your addresses, so old work, school, and machine-default addresses are
+found. Bots and GitHub's shared web address never link. Addresses that only look
+like yours are listed as possible and not counted; add any that are yours with
+`--author`. Addresses are shown in your terminal and never written to the report.
+
+To settle this once, run `urfluency init ~/Projects`. It asks about each possible
+address and saves your answers to `settings.json` in your user config folder
+(`~/Library/Application Support/urfluency` on macOS, `~/.config/urfluency` on
+Linux), readable only by you and never uploaded. Later scans start from the saved
+addresses, still find new ones, and stop suggesting the ones you declined.
+
+Projects that lost their Git history (or never had commits) are scanned too. A
+folder counts as a project when it has a manifest such as `go.mod` or
+`package.json`, or source files and no projects inside it. With no history to
+attribute lines, every line counts as yours, so these results appear in their own
+**Projects without Git** section marked as declared authorship, never mixed with
+attributed results, and without the measures that need history (AI share,
+durability, tests with changes).
+
+To scan everything that way, pass `--no-git`: repositories are read as plain
+folders, as their files are now, and every line counts as yours, including code
+someone else committed. It suits projects you don't track in Git or keep private.
+The results, and an upload made with it, are marked declared rather than verified;
+`--since` and `--author` do not apply.
+
+Every scan includes an **AI engineering** section: does your agent-assisted work
+hold up as well as your own? Using agents is never counted against you, and the
+share of AI-assisted code is shown but never scored. The section compares findings
+on AI-assisted lines (from commit trailers such as `Co-Authored-By: Claude`, and
+from sessions) with your own hand-written baseline per language, names the rules
+where agent code falls short, and shows how often lines needed a fix within 90 days
+of being written.
+
+`--sessions` adds what happened in your local Claude Code, Codex, and GitHub
+Copilot Chat (VS Code) sessions for the scanned repositories: whether agent changes
+were tested or checked, whether tasks needed corrections, and how often you
+rejected or changed agent edits. Prompt text is reduced to signals as it is read
+and is never stored, printed, or uploaded.
+
+Prompting rules ship already validated: a rule is graded only if it reflects what
+actually happened in sessions. Maintainers check candidate rules with
+`urfluency validate`, which compares outcomes for tasks with and without each prompt
+signal and prints counts only (see DESIGN.md).
+
+## Check a repository before you run it
+
+```
+urfluency check https://github.com/owner/repo
+urfluency check ./some-folder
+```
+
+`check` looks for signs of malicious or privacy-invasive behavior: install-time
+scripts, downloaded code that is run, data sent to fixed addresses, reads of SSH
+keys, cloud credentials, or browser profiles, obfuscated payloads, persistence
+such as cron jobs or reverse shells, risky dependencies, and committed secrets.
+It reads files only and runs nothing. A URL is cloned into a temporary folder
+with Git hooks, submodules, symlinks, and LFS off and without your Git
+configuration or credentials, then deleted. The report gives a verdict
+(No indicators found, Review recommended, or High-risk indicators) and a score
+out of 100; it can find indicators but never proves a repository is safe.
+Findings in tests, CI, and container builds count less, since they do not run on
+install. `--json` prints the report as data.
+
+The hosted scanner at [urfluency.com/scan](https://urfluency.com/scan) runs the
+same checks in an isolated, disposable machine with no credentials, whose network
+reaches only the Git hosts. Anyone can run a few scans a day without an account;
+signed-in accounts get more and keep a private history of verdicts.
+
+## Known vulnerabilities in your dependencies
+
+`scan` and `check` read each project's lockfiles (npm, Yarn, and pnpm; Poetry,
+Pipfile, and pinned requirements; Go modules; Composer; Bundler; Cargo; NuGet;
+and Pub) and look up the locked versions in [OSV](https://osv.dev), the open
+vulnerability database. The report lists each vulnerable package with its CVE
+IDs and severity, and the version that fixes all of them. It also flags pinned
+runtimes with known critical flaws, such as PHP versions affected by PHP2Shell
+(CVE-2026-109618 and CVE-2026-109619) in a Dockerfile, `composer.json`, or
+`.tool-versions`. Results are yours alone: they never reach an upload, a
+profile, or a badge, and they never change a safety check's verdict.
+
+```
+urfluency vulns update ~/Projects    # download databases for these projects' ecosystems
+urfluency scan --offline ~/Projects  # check against them; nothing is sent
+urfluency vulns status               # what is downloaded, and how old
+```
+
+A live check sends only package names, versions, and ecosystems, and takes about
+a second. If osv.dev cannot be reached, the scan still finishes, uses
+downloaded databases if there are any, and says what was not checked; it never
+reports a check that did not run as clean.
+
+## Sharing your results (optional)
+
+Scans never send your code. To check your dependencies for known
+vulnerabilities, they send each locked package's name, version, and ecosystem
+to [osv.dev](https://osv.dev), the open vulnerability database, and show you
+the results; these are never uploaded. `--offline` checks against databases you
+download once with `urfluency vulns update`, and sends nothing at all;
+`urfluency init --offline` makes that the default.
+
+To publish a profile and badges on urfluency.com:
+
+```
+urfluency login                      # approve the code at urfluency.com/connect
+urfluency upload --since all ~/Projects
+```
+
+`upload` runs its own scan; it does not reuse an earlier `urfluency scan`, so
+pass it the same path and flags. It says what it will send and asks first;
+`--dry-run` prints the exact payload instead. It sends the report's summary and
+ratings, and the counts behind them for the official model to score: lines,
+findings per rule, idioms, and habits per language, and for each repository,
+unnamed, its languages, CI gates, and line and finding counts. It never sends
+code, prompt text, repository names, paths, commit hashes, or email addresses,
+and it refuses a payload that looks like it contains them.
+Uploads start private. `urfluency status` shows the login, when it expires,
+and your plan; `urfluency logout` deletes the token on this machine. The CLI's
+results are the same on every plan: Pro adds AI-written persona text, upload
+history, and published links on the site.
+
+To rate a repository as a whole, connect it at
+[urfluency.com/account/repos](https://urfluency.com/account/repos). A public one is
+rated by urFluency when you connect it and on each release; a private one is rated
+in your own CI by the GitHub Action, which sends only the ratings, or by urFluency
+on Pro with credit. See [Connect a repository](https://urfluency.com/docs/repositories/connect).
+
+## What is read
+
+Only files in the supported languages (Go, Python, JavaScript, TypeScript, Rust, C, C++, C#, Java, Kotlin, PHP, Ruby, Swift, Dart, Shell, PowerShell) are
+read and checked, plus the CI, build, and agent instruction files that the
+practices measures need. Other extensions are ignored unless you include them,
+for example `--include-ext .tf,.yml` to also check Terraform and YAML for secrets;
+`urfluency init --include-ext ...` saves them for every scan. Secrets in files you
+do not include are not caught.
+
+## Tools
+
+The report lists the tools you work with, judged from the paths of files you
+committed to, never their contents: infrastructure (Terraform, Docker, Helm,
+Kustomize, Serverless), CI (GitHub Actions, GitLab CI, Jenkins, Cloud Build, Azure
+Pipelines), build (Make, Gradle, Maven), packages (npm, Go modules, pip), and
+quality tooling (pre-commit, ESLint, Prettier, golangci-lint), each with commits,
+files, repositories, and when you last used it. Git itself is measured from your
+commit messages: subject length, descriptive subjects, bodies that explain the
+change, and Conventional Commits. Messages are measured, never stored.
+
+## Summary
+
+Every report ends with a summary that answers one question: is this person
+proficient? It rates all your work at once, with and without Git (`combined` in
+JSON), while the sections before it keep Git repositories and folders without
+Git apart so you can trace what was verified and what was declared. It leads with strengths, then shows how you design systems, how you
+brief agents, what holds the ratings down, and how far to trust the result.
+
+Every area gets a rating from 0 to 100 and a level: **Beginner** (below 40),
+**Intermediate** (40+), **Advanced** (70+), or **Expert** (85+).
+
+| Area | Rated on |
+| --- | --- |
+| Languages | How well you write it (see Proficiency); one rating per language, combining work with and without Git by lines |
+| Frameworks | Experience: repositories and files of yours that use it |
+| Design | Experience in each kind of system you build, from the libraries your files import: cloud services, integrations with other services, web APIs, messaging, databases, analytics, auth, observability, infrastructure as code, AI applications, machine learning, front ends, mobile, and command-line tools |
+| Platforms | Experience with AWS, Google Cloud, Azure, Firebase, Kubernetes, Cloudflare, Vercel, Supabase, Snowflake, Databricks, Salesforce, and Palantir Foundry: files of yours that import their SDKs, and their deploy and infrastructure files you committed to |
+| Tools | Experience: repositories and files of yours for each tool |
+| Ways of working | Commit messages, changes committed with tests, and the quality gates your CI runs |
+| Prompting | With `--sessions`: how often agent tasks were verified and right the first time |
+
+Design areas that appear together name the kind of work you do, such as
+"cloud integration" (cloud services with calls to other services) or "platform and
+infrastructure". With `--sessions`, the summary also describes how you brief
+agents: how often you explain the goal, set limits, state expected behavior, point
+at specific code, or ask for checks. Only counts are kept; prompt text is never
+stored. These traits are descriptive and are not scored.
+
+Experience ratings measure how much you used something, not how well; only
+language ratings judge quality.
+
+The summary also builds a **persona** from these ratings: your strongest areas,
+the role families your work fits (backend and API, front end, full stack,
+microservices, mobile, platform and DevOps, site reliability, cloud,
+integration, data, machine learning, AI applications, developer tooling,
+systems, Salesforce, Palantir Foundry), ranked by how many repositories show
+the evidence, how well that code is written, and how recently you did it,
+and adjacent roles with what is missing for each, linked to your next
+steps. A role fits when each of its requirements is rated Intermediate (40) or
+higher. Each role shows its repositories, the code rating of the languages
+its work is in, and the first and latest months of that work. Dates cover
+only the repositories scanned, so no total of years is ever claimed. It
+describes the work, not the person: no seniority, salary, or personal traits. It is built offline with fixed rules, and the site shows it on
+your public profile or published links only if you turn it on.
+
+Platform detection never reads stored values. Deploy files such as
+`cloudbuild.yaml`, `samconfig.toml`, or `wrangler.toml` are recognized by name
+and never opened. From Terraform `.tf` files, only the type of each `resource`,
+`data`, and `provider` block is read, such as `aws_s3_bucket`. `*.tfvars`,
+state, `.terraform/`, Helm values, and Ansible variables are never opened. The
+report keeps platform names and counts only.
+
+## Proficiency
+
+Each language gets a score from 0 to 100 and a level. Both come from your own
+lines: the share of the language's idioms you use well, such as error wrapping in
+Go, dataclasses and generators in Python, or type guards in TypeScript, and how
+cleanly you write it in each category (security, type safety, clean code, language
+proficiency). A weak category caps the score, so strengths cannot hide it. The
+report lists the idioms you demonstrate under **Shows**. The model (version
+`local-0.3-uncalibrated`) is documented in DESIGN.md. It is not yet calibrated against
+outcomes, and every rating names the model version that produced it.
+
+### Local estimate and official score
+
+The CLI rates your code on your machine with an open model: you can read
+exactly how every score is worked out. That is your **local estimate**, and the
+report labels it so.
+
+When you upload, urFluency scores the same counts with its **official model**,
+and that is the score your profile and badges show. The official model is tuned
+over time and changes as it improves; when it does, your profile is rescored
+without uploading again. The local model is updated less often, so the two can
+differ by a few points, and sometimes by a level. Both models read the same
+counts, and neither sees your code.
+
+## What it checks
+
+| Area | Coverage |
+| --- | --- |
+| Languages | Go, Python, JavaScript, TypeScript, Rust, C, C++, C#, Java, Kotlin, PHP, Ruby, Swift, Dart, Shell (`.sh`, `.bash`), PowerShell (`.ps1`, `.psm1`) |
+| Frameworks | Detected from each file's imports: React, React Native (and Expo), Angular, Express, Fastify, FastAPI, Django, Flask; Go web frameworks (Fiber, Gin, Echo, Chi, Gorilla, gRPC, fasthttp); PHP frameworks (Laravel, Symfony, WordPress, Slim, CodeIgniter, Yii, Laminas); Ruby frameworks (Rails, Sinatra, Hanami, Roda, Grape); and the main frameworks of each newer language, such as .NET (ASP.NET Core, Entity Framework, Blazor, MAUI), Spring, Android and Jetpack Compose, Ktor, SwiftUI, Vapor, Flutter, Tokio, and Qt |
+| Security | Credentials committed in source and config files (private keys, cloud keys, API tokens, passwords in URLs or code), SQL and shell injection, `eval`, unsafe deserialization, disabled TLS verification, and framework misconfiguration |
+| AI engineering | Quality of AI-assisted code against your own baseline per language, durability, and with `--sessions` verification, corrections, and review activity |
+| Practices | Test lines per code line, code changes committed with tests (AI-assisted and other), and what the CI you wrote runs; shown, not yet scored |
+| Complexity | Functions above cognitive complexity 15 (SonarSource's measure), in every language |
+| Reliability | Go: fresh contexts where a request context exists, `defer` in loops, HTTP clients without timeouts, a goroutine per channel message without a bound; React effects without dependencies; Django queries inside loops |
+| Categories | Clean code, architecture, type safety, language proficiency, security, prompting |
+
+Files that hold secrets by design are never read: `.env` files, key and certificate
+files, credential configs such as `.npmrc` or service-account JSON, Terraform state
+and variables, and directories such as `secrets/` or `.ssh/`. Secret findings show
+the rule and line only. Credential values are never printed, stored, or uploaded,
+and nothing about a scanned repository is kept: only scores.
+
+A finding that is not a real problem, such as a placeholder flagged as a secret,
+can be left out of later scans and uploads:
+
+```
+urfluency scan --locations ~/Projects            # shows each finding's rule and file:line
+urfluency dismiss sec.hardcoded-password src/model.ts:336 --reason "SDK placeholder"
+urfluency dismiss --list                         # or --undo RULE FILE:LINE
+```
+
+A secret removed from your files no longer counts, even if the change is not
+committed; it can still be in the repository's history, so rotate any that
+were live. Only the rule and a hash of the line are saved, on this machine. A dismissal
+follows the line if the file moves and lapses if the line changes. Reports and
+uploads say how many findings you dismissed, never which.
+
+## License
+
+The [Functional Source License, Version 1.1, MIT Future License](LICENSE.md)
+(FSL-1.1-MIT). You may use, change, and share the CLI for any purpose except a
+competing product or service, and each version becomes available under the MIT
+license two years after its release. Versions before 1.0.0 were released under
+the MIT license. The bundled tree-sitter grammars keep their own licenses, in
+`third_party/` and in each Go module.
+
+urFluency is a name of RB Creations; the license grants no right to use it.

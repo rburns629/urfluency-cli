@@ -1,0 +1,194 @@
+package analysis
+
+import (
+	"bytes"
+	"context"
+	"errors"
+	"io/fs"
+	"os"
+	"path/filepath"
+	"strings"
+
+	"github.com/rburns629/urfluency-cli/gitdata"
+)
+
+// declared marks lines whose authorship the user declared rather than Git
+// recorded. Ownership values must be non-empty for findings to count.
+const declared = "declared"
+
+// errNotRegular marks a path readRegular refuses.
+var errNotRegular = errors.New("not a regular file within the size limit")
+
+// readRegular reads rel under dir only if it is a regular file inside dir of
+// at most maxScanBytes. A repository can commit a symlink to a file outside
+// it, such as ~/.ssh/id_rsa or /dev/zero, or the folder can hold a FIFO that
+// blocks a read: os.Root refuses paths that leave dir, and Lstat refuses
+// symlinks, FIFOs, and devices.
+func readRegular(dir, rel string) ([]byte, error) {
+	root, err := os.OpenRoot(dir)
+	if err != nil {
+		return nil, err
+	}
+	defer root.Close()
+	name := filepath.FromSlash(rel)
+	info, err := root.Lstat(name)
+	if err != nil {
+		return nil, err
+	}
+	if !info.Mode().IsRegular() || info.Size() > maxScanBytes {
+		return nil, errNotRegular
+	}
+	return root.ReadFile(name)
+}
+
+// projectManifests mark a folder as a project in its own right.
+var projectManifests = map[string]bool{
+	"package.json": true, "go.mod": true, "pyproject.toml": true, "requirements.txt": true,
+	"setup.py": true, "Pipfile": true, "Cargo.toml": true, "pom.xml": true, "build.gradle": true,
+	"composer.json": true, "Gemfile": true, "pubspec.yaml": true,
+}
+
+// ProjectFiles reports whether a folder holds a project manifest such as
+// package.json or go.mod, and whether it holds source files urFluency analyzes.
+func ProjectFiles(dir string) (manifest, source bool) {
+	entries, err := os.ReadDir(dir)
+	if err != nil {
+		return false, false
+	}
+	for _, e := range entries {
+		if e.IsDir() {
+			continue
+		}
+		manifest = manifest || projectManifests[e.Name()]
+		source = source || ForPath(e.Name()) != nil
+	}
+	return manifest, source
+}
+
+// buildOutputDirs hold generated files. A Git scan leaves them out because they
+// are usually ignored; a folder scan may have no .gitignore to say so.
+var buildOutputDirs = map[string]bool{"dist": true, "build": true, "out": true, "coverage": true, "target": true}
+
+// ScanDir analyzes a folder without Git history. With no history to attribute
+// lines, every line counts as the user's: the result is Declared, and history
+// measures (AI trailers, durability, test habits) are left empty. The same
+// filters as a Git scan apply: dependency folders, secret files, files over
+// maxScanBytes, symlinks, and binaries are never read. Files the folder's
+// .gitignore excludes, build output, and files .gitattributes marks as vendored
+// or generated are skipped too, as they would be in a repository.
+func ScanDir(ctx context.Context, dir string, opts Options) (Result, error) {
+	// Git reads .gitignore and .gitattributes through a scratch repository; if Git
+	// is unavailable, the folder is scanned without them.
+	ignored := map[string]bool{}
+	repo, cleanup, err := gitdata.Scratch(ctx, dir)
+	if err == nil {
+		defer cleanup()
+		if ig, err := repo.Ignored(ctx); err == nil {
+			ignored = ig
+		}
+	}
+	var paths, manifests []string
+	toolFiles := map[string]ToolUse{}
+	platforms := map[string]PlatformUse{}
+	err = filepath.WalkDir(dir, func(p string, d fs.DirEntry, err error) error {
+		if err != nil {
+			return nil // unreadable entries are skipped
+		}
+		rel, _ := filepath.Rel(dir, p)
+		rel = filepath.ToSlash(rel)
+		if d.IsDir() {
+			name := d.Name()
+			if p != dir && ((strings.HasPrefix(name, ".") && name != ".github") || IsDependencyDir(name) || skippedDirs[name] || IsProtectedDir(name) ||
+				buildOutputDirs[name] || ignored[rel+"/"] || (opts.SkipDir != nil && opts.SkipDir(p))) {
+				return filepath.SkipDir
+			}
+			return nil
+		}
+		if name := toolOf(rel); name != "" && d.Type().IsRegular() && !ignored[rel] {
+			u := toolFiles[name]
+			u.Repos, u.Files = 1, u.Files+1
+			toolFiles[name] = u
+		}
+		if d.Type().IsRegular() && !ignored[rel] {
+			for _, platform := range platformsOfFile(rel, func() []byte {
+				if info, err := d.Info(); err != nil || info.Size() > maxScanBytes {
+					return nil
+				}
+				b, _ := os.ReadFile(p)
+				return b
+			}) {
+				addPlatform(platforms, platform, 0, 1)
+			}
+		}
+		if d.Type().IsRegular() && isScaffoldManifest(d.Name()) {
+			manifests = append(manifests, rel)
+		}
+		if !d.Type().IsRegular() || ignored[rel] || IsProtected(rel) || inSkippedDir(rel) ||
+			!(opts.wanted(rel) || readEvenWithoutAnalyzer(rel)) {
+			return nil
+		}
+		if info, err := d.Info(); err != nil || info.Size() > maxScanBytes {
+			return nil
+		}
+		paths = append(paths, rel)
+		return nil
+	})
+	if err != nil {
+		return Result{}, err
+	}
+	generated := scaffolding(append(manifests, paths...), func(rel string) []byte {
+		b, _ := os.ReadFile(filepath.Join(dir, filepath.FromSlash(rel)))
+		return b
+	})
+	kept := paths[:0]
+	for _, p := range paths {
+		if !generated[p] {
+			kept = append(kept, p)
+		}
+	}
+	paths = kept
+	if repo.GitDir != "" {
+		if paths, err = dropVendored(ctx, repo, paths); err != nil {
+			return Result{}, err
+		}
+	}
+
+	var files []ownedFile
+	opts.progress("reading files", 0, len(paths))
+	for i, rel := range paths {
+		if err := ctx.Err(); err != nil {
+			return Result{}, err
+		}
+		opts.progress("reading files", i+1, len(paths))
+		content, err := os.ReadFile(filepath.Join(dir, filepath.FromSlash(rel)))
+		if err != nil || bytes.IndexByte(content, 0) >= 0 {
+			continue // unreadable or binary
+		}
+		owned := map[int]string{}
+		lines := bytes.Count(content, []byte("\n"))
+		if len(content) > 0 && content[len(content)-1] != '\n' {
+			lines++
+		}
+		for n := 1; n <= lines; n++ {
+			owned[n] = declared
+		}
+		f := File{Path: rel, Content: content}
+		of := ownedFile{file: f, owned: owned, text: true, ai: agentWritten(content, owned, opts.AgentLines[rel])}
+		if a := ForPath(rel); a != nil && !a.Skip(f) {
+			of.analyzer = a
+		}
+		files = append(files, of)
+	}
+
+	var scripts []string
+	for _, s := range buildScriptPaths {
+		if content, err := readRegular(dir, s); err == nil {
+			scripts = append(scripts, string(content))
+		}
+	}
+	result := Result{Repos: 1, MarkedByTool: map[string]int{}, Declared: true, Tools: toolFiles, Platforms: platforms}
+	if err := analyzeFiles(ctx, &result, files, nil, nil, scripts, opts); err != nil {
+		return Result{}, err
+	}
+	return result, nil
+}

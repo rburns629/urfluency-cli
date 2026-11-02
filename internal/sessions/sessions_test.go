@@ -1,0 +1,404 @@
+package sessions
+
+import (
+	"encoding/json"
+	"os"
+	"path/filepath"
+	"strings"
+	"testing"
+	"time"
+)
+
+// Synthetic transcripts in each agent's format; no real session is read by tests.
+const claudeTranscript = `{"type":"user","cwd":"/w/app","timestamp":"2026-10-01T10:00:00Z","message":{"role":"user","content":"Add a retry to fetchUser in api/client.go; it should give up after 3 attempts. Add tests."}}
+{"type":"assistant","message":{"model":"claude-test-1","content":[{"type":"tool_use","id":"g1","name":"Grep","input":{"pattern":"fetchUser"}},{"type":"tool_use","id":"b1","name":"Bash","input":{"command":"cat api/client.go"}}]}}
+{"type":"assistant","message":{"content":[{"type":"tool_use","id":"t1","name":"Edit","input":{"file_path":"/w/app/api/client.go","old_string":"func fetchUser() {\n\treturn get(url)\n}","new_string":"func fetchUser() {\n\tfor attempt := 0; attempt < 3; attempt++ {\n\treturn get(url)\n}"}}]}}
+{"type":"user","message":{"content":[{"type":"tool_result","tool_use_id":"t1","content":"ok"}]},"toolUseResult":{"structuredPatch":[{"lines":[" func fetchUser() {","+\tfor attempt := 0; attempt < 3; attempt++ {","\treturn get(url)"]}]}}
+{"type":"assistant","message":{"content":[{"type":"tool_use","id":"t2","name":"Write","input":{"file_path":"/w/app/rejected.go","content":"package rejected_by_user\n"}}]}}
+{"type":"user","message":{"content":[{"type":"tool_result","tool_use_id":"t2","is_error":true,"content":"The user doesn't want to proceed"}]}}
+{"type":"assistant","message":{"content":[{"type":"tool_use","id":"t3","name":"Write","input":{"file_path":"/w/app/new.go","content":"package newpackage\n}\n"}}]}}
+{"type":"user","message":{"content":[{"type":"tool_result","tool_use_id":"t3","content":"created"}]},"toolUseResult":{"type":"create"}}
+{"type":"assistant","message":{"model":"<synthetic>","content":[{"type":"tool_use","id":"b2","name":"Bash","input":{"command":"go test ./..."}},{"type":"tool_use","id":"r1","name":"Read","input":{"file_path":"/w/app/new.go"}}]}}
+{"type":"user","isSidechain":true,"message":{"content":"Subagent prompt written by the agent, should be ignored"}}
+{"type":"user","isMeta":true,"message":{"content":"Caveat: injected by the client"}}
+{"type":"user","message":{"content":[{"type":"text","text":"no, that's the wrong file"}]}}
+not json at all
+`
+
+const codexTranscript = `{"timestamp":"2026-10-02T09:00:00Z","type":"session_meta","payload":{"cwd":"/w/svc"}}
+{"type":"response_item","payload":{"type":"message","role":"user","content":[{"type":"input_text","text":"<environment_context>ignored</environment_context>"}]}}
+{"type":"event_msg","payload":{"type":"user_message","message":"Fix the crash in parser.py when the input is empty"}}
+{"type":"response_item","payload":{"type":"function_call","name":"shell","arguments":"{\"command\":[\"bash\",\"-lc\",\"rg parse\"]}"}}
+{"type":"response_item","payload":{"type":"custom_tool_call","name":"apply_patch","input":"*** Begin Patch\n*** Update File: parser.py\n@@\n-    return data[0]\n+    if not data:\n+        return None\n*** Add File: /w/svc/notes_helper.py\n+def describe_notes():\n*** End Patch"}}
+{"type":"response_item","payload":{"type":"function_call","name":"shell","arguments":"{\"command\":[\"apply_patch\",\"*** Begin Patch\\n*** Update File: lib/util.py\\n+value = compute_total(items)\\n*** End Patch\"]}"}}
+{"type":"response_item","payload":{"type":"function_call","name":"exec_command","arguments":"{\"cmd\":\"pytest -q\"}"}}
+`
+
+func TestReadClaude(t *testing.T) {
+	s, err := ReadClaude(strings.NewReader(claudeTranscript))
+	if err != nil {
+		t.Fatal(err)
+	}
+	if s.Cwd != "/w/app" || s.Start.IsZero() {
+		t.Errorf("cwd/start = %q %v", s.Cwd, s.Start)
+	}
+	if len(s.Prompts) != 2 || s.Prompts[0].Type != Feature || !s.Prompts[0].Context || !s.Prompts[0].Criteria || !s.Prompts[0].Verification || !s.Prompts[1].Correction {
+		t.Errorf("prompts = %+v", s.Prompts)
+	}
+	edited := s.Edits["/w/app/api/client.go"]
+	if len(edited) != 1 || !edited["for attempt := 0; attempt < 3; attempt++ {"] {
+		t.Errorf("client.go lines = %v, want only the added loop", edited)
+	}
+	if !s.Edits["/w/app/new.go"]["package newpackage"] {
+		t.Errorf("created file lines = %v", s.Edits["/w/app/new.go"])
+	}
+	if s.Edits["/w/app/rejected.go"] != nil {
+		t.Error("a rejected edit was counted")
+	}
+	if len(s.Models) != 1 || !s.Models["claude-test-1"] {
+		t.Errorf("models = %v, want only claude-test-1", s.Models)
+	}
+	if p := s.Prompts[0]; p.ExploresBeforeEdit != 2 || p.Explores != 3 || p.Edits != 3 || p.Checks != 1 {
+		t.Errorf("activity = %+v, want 2 explores before 3 edit attempts, 3 explores, 1 check", p)
+	}
+}
+
+func TestReadClaudeEditWithoutPatchSkipsKeptLines(t *testing.T) {
+	in := `{"type":"assistant","message":{"content":[{"type":"tool_use","id":"t","name":"Edit","input":{"file_path":"/w/a.go","old_string":"keep this line here\nold line removed","new_string":"keep this line here\nnew line inserted"}}]}}
+{"type":"user","message":{"content":[{"type":"tool_result","tool_use_id":"t","content":"ok"}]}}
+`
+	s, err := ReadClaude(strings.NewReader(in))
+	if err != nil {
+		t.Fatal(err)
+	}
+	if got := s.Edits["/w/a.go"]; len(got) != 1 || !got["new line inserted"] {
+		t.Errorf("lines = %v", got)
+	}
+}
+
+func TestReadCodex(t *testing.T) {
+	s, err := ReadCodex(strings.NewReader(codexTranscript))
+	if err != nil {
+		t.Fatal(err)
+	}
+	if s.Cwd != "/w/svc" || len(s.Prompts) != 1 || s.Prompts[0].Type != Bug {
+		t.Errorf("session = %+v", s)
+	}
+	if p := s.Prompts[0]; p.ExploresBeforeEdit != 1 || p.Edits != 2 || p.Checks != 1 {
+		t.Errorf("activity = %+v, want 1 explore before 2 patches and 1 check", p)
+	}
+	want := map[string]string{
+		"/w/svc/parser.py":       "return None",
+		"/w/svc/notes_helper.py": "def describe_notes():",
+		"/w/svc/lib/util.py":     "value = compute_total(items)",
+	}
+	for path, line := range want {
+		if !s.Edits[path][line] {
+			t.Errorf("%s lines = %v, want %q", path, s.Edits[path], line)
+		}
+	}
+	if s.Edits["/w/svc/parser.py"]["return data[0]"] {
+		t.Error("a removed line was counted")
+	}
+}
+
+func TestClassify(t *testing.T) {
+	tests := []struct {
+		text string
+		want Prompt
+	}{
+		{"yes", Prompt{}},
+		{"/commit", Prompt{}},
+		{"No, use the existing helper", Prompt{Correction: true}},
+		{"it still doesn't work", Prompt{Correction: true}},
+		{"Fix the login error shown in auth/session.go", Prompt{Type: Bug, Context: true}},
+		{"Implement CSV export so that admins can download reports, and run the tests", Prompt{Type: Feature, Criteria: true, Verification: true, Rationale: true}},
+		{"Add retries to the export job, but never retry a request that already wrote rows", Prompt{Type: Feature, Constraints: true}},
+		{"Refactor the payment module please", Prompt{Type: Refactor}},
+		{"What does this function actually do?", Prompt{Type: Other}},
+		{"Can you add a cache to the user lookup?", Prompt{Type: Feature}},
+		{"<ide_opened_file>The user opened a.go</ide_opened_file> Fix the crash in parse()", Prompt{Type: Bug, Context: true}},
+		{"<local-command-stdout>output</local-command-stdout>", Prompt{}},
+		{"<command-name>/clear</command-name>", Prompt{}},
+	}
+	for _, tt := range tests {
+		if got := Classify(tt.text); got != tt.want {
+			t.Errorf("Classify(%q) = %+v, want %+v", tt.text, got, tt.want)
+		}
+	}
+}
+
+func TestGrade(t *testing.T) {
+	s := Session{Prompts: []Prompt{
+		{Type: Feature, Context: true, ExploresBeforeEdit: 2, Edits: 1},
+		{Correction: true, ExploresBeforeEdit: 4, Edits: 1}, {Correction: true}, // same task, corrected
+		{Type: Other, Edits: 5}, {Correction: true}, // a question with edits is a task; its correction is not graded
+		{Type: Bug, Context: true, Edits: 1, Checks: 1},
+		{Type: Refactor}, // no edits, so not graded for verification
+	}}
+	tasks := Tasks([]Session{s})
+	if len(tasks) != 4 {
+		t.Fatalf("tasks = %+v", tasks)
+	}
+	if f := tasks[0]; !f.Corrected || f.FollowUps != 2 || f.ExploresBeforeEdit != 2 || f.Edits != 2 || f.Checks != 0 {
+		t.Errorf("feature task = %+v", f)
+	}
+	g := Grade([]Session{s})
+	if g.Sessions != 1 || g.Tasks[Feature] != 1 || g.Tasks[Bug] != 1 || g.Tasks[Refactor] != 1 || g.Tasks[Other] != 1 || g.Edits != 8 {
+		t.Errorf("grades = %+v", g)
+	}
+	want := map[string]Tally{
+		// Verification grades tasks with edits by whether a check ran.
+		"prompt.unverified-change": {Applicable: 3, Missed: 2},
+		"prompt.needed-correction": {Applicable: 3, Missed: 1},
+	}
+	if len(g.Rules) != len(want) {
+		t.Errorf("rules = %v", g.Rules)
+	}
+	for id, tally := range want {
+		if g.Rules[id] != tally {
+			t.Errorf("%s = %+v, want %+v", id, g.Rules[id], tally)
+		}
+	}
+}
+
+func TestDiscover(t *testing.T) {
+	d := Dirs{Claude: t.TempDir(), Codex: t.TempDir()}
+	write := func(path string, age time.Duration) {
+		t.Helper()
+		if err := os.MkdirAll(filepath.Dir(path), 0o755); err != nil {
+			t.Fatal(err)
+		}
+		if err := os.WriteFile(path, []byte("{}\n"), 0o600); err != nil {
+			t.Fatal(err)
+		}
+		at := time.Now().Add(-age)
+		if err := os.Chtimes(path, at, at); err != nil {
+			t.Fatal(err)
+		}
+	}
+	write(filepath.Join(d.Claude, "projects", "-w-app", "s1.jsonl"), time.Hour)
+	write(filepath.Join(d.Claude, "projects", "-w-app", "s1", "subagents", "a.jsonl"), time.Hour)
+	write(filepath.Join(d.Claude, "projects", "-w-app", "old.jsonl"), 400*24*time.Hour)
+	write(filepath.Join(d.Codex, "sessions", "2026", "10", "02", "rollout-x.jsonl"), time.Hour)
+	write(filepath.Join(d.Codex, "sessions", "2026", "10", "02", "other.jsonl"), time.Hour)
+
+	got, err := Discover(d, time.Now().AddDate(0, 0, -30))
+	if err != nil {
+		t.Fatal(err)
+	}
+	if len(got) != 2 || got[0].Agent != "claude-code" || filepath.Base(got[0].Path) != "s1.jsonl" || got[1].Agent != "codex" {
+		t.Errorf("transcripts = %+v", got)
+	}
+	if _, err := Discover(Dirs{Claude: t.TempDir(), Codex: filepath.Join(t.TempDir(), "missing")}, time.Time{}); err != nil {
+		t.Errorf("missing directories should be ignored: %v", err)
+	}
+}
+
+func TestClassifyTestTasks(t *testing.T) {
+	if got := Classify("Add unit tests for the date parser"); got.Type != Test {
+		t.Errorf("test task = %+v", got)
+	}
+}
+
+// copilotOpLog mirrors VS Code's JSONL chat format: an initial state, a request
+// appended, its response appended with truncation (i), and its result set.
+const copilotOpLog = `{"kind":0,"v":{"version":3,"creationDate":1790000000000,"requests":[]}}
+{"kind":2,"k":["requests"],"v":[{"timestamp":1790000001000,"message":{"text":"<ide_opened_file>x</ide_opened_file> Fix the crash in parser.go on empty input"},"response":[]}]}
+{"kind":2,"k":["requests",0,"response"],"v":[{"kind":"thinking"},{"kind":"stale"}]}
+{"kind":2,"k":["requests",0,"response"],"i":1,"v":[{"kind":"toolInvocationSerialized"}]}
+{"kind":1,"k":["requests",0,"result"],"v":{"metadata":{"resolvedModel":"gpt-test-mini","toolCallRounds":[{"toolCalls":[
+ {"name":"grep_search","arguments":"{\"query\":\"parse\"}"},
+ {"name":"apply_patch","arguments":"{\"input\":\"*** Begin Patch\\n*** Update File: /w/web/parser.go\\n+\\tif len(input) == 0 {\\n*** End Patch\",\"explanation\":\"x\"}"},
+ {"name":"replace_string_in_file","arguments":"{\"filePath\":\"/w/web/a.go\",\"oldString\":\"keep this line here\",\"newString\":\"keep this line here\\nreturn errEmptyInput\"}"},
+ {"name":"create_file","arguments":"{\"filePath\":\"/w/web/b.go\",\"content\":\"package parserhelpers\"}"},
+ {"name":"run_in_terminal","arguments":"{\"command\":\"go test ./...\"}"}]}]}}}
+`
+
+func TestReadCopilotChatOpLog(t *testing.T) {
+	// The fixture's result line spans several lines for readability; join them.
+	log := strings.ReplaceAll(copilotOpLog, "\n {", " {")
+	s, err := ReadCopilotChat(strings.NewReader(log), "/w/web")
+	if err != nil {
+		t.Fatal(err)
+	}
+	if s.Agent != "copilot-vscode" || s.Cwd != "/w/web" || s.Start.UnixMilli() != 1790000000000 {
+		t.Errorf("session = %+v", s)
+	}
+	if len(s.Prompts) != 1 {
+		t.Fatalf("prompts = %+v", s.Prompts)
+	}
+	if !s.Models["gpt-test-mini"] {
+		t.Errorf("models = %v, want the resolved model", s.Models)
+	}
+	if p := s.Prompts[0]; p.Type != Bug || !p.Context || p.ExploresBeforeEdit != 1 || p.Edits != 3 || p.Checks != 1 {
+		t.Errorf("prompt = %+v", p)
+	}
+	want := map[string]string{"/w/web/parser.go": "if len(input) == 0 {", "/w/web/a.go": "return errEmptyInput", "/w/web/b.go": "package parserhelpers"}
+	for path, line := range want {
+		if !s.Edits[path][line] {
+			t.Errorf("%s lines = %v, want %q", path, s.Edits[path], line)
+		}
+	}
+	if s.Edits["/w/web/a.go"]["keep this line here"] {
+		t.Error("an unchanged line was counted as added")
+	}
+}
+
+func TestReadCopilotChatDocument(t *testing.T) {
+	doc := `{"creationDate":1790000000000,"requests":[{"modelId":"copilot/test-model","message":{"text":"Add a CSV export to the reports page"},"result":{"metadata":{"toolCallRounds":[{"toolCalls":[{"name":"create_file","arguments":"{\"filePath\":\"/w/web/export.ts\",\"content\":\"export function toCsv() {}\"}"}]}]}}}]}`
+	s, err := ReadCopilotChat(strings.NewReader(doc), "")
+	if err != nil {
+		t.Fatal(err)
+	}
+	if len(s.Prompts) != 1 || s.Prompts[0].Type != Feature || !s.Edits["/w/web/export.ts"]["export function toCsv() {}"] || !s.Models["copilot/test-model"] {
+		t.Errorf("session = %+v", s)
+	}
+	// A one-line operation log is valid JSON too, but must be replayed.
+	one := `{"kind":0,"v":{"creationDate":1790000000000,"requests":[{"message":{"text":"Add a CSV export to the reports page"}}]}}`
+	if s, err := ReadCopilotChat(strings.NewReader(one), ""); err != nil || len(s.Prompts) != 1 {
+		t.Errorf("one-line op log: %+v, %v", s, err)
+	}
+}
+
+func TestReadCodexCodeMode(t *testing.T) {
+	script := "text(await tools.exec_command({cmd: \"rg parse\"}));\n" +
+		"text(await tools.exec_command({cmd: 'pytest -q', yield_time_ms: 1000}));\n" +
+		"await tools.apply_patch(\"*** Begin Patch\\n*** Add File: notes_helper.py\\n+def describe_notes():\\n*** End Patch\");"
+	scriptJSON, _ := json.Marshal(script)
+	in := `{"timestamp":"2026-10-02T09:00:00Z","type":"session_meta","payload":{"cwd":"/w/svc","model_provider":"lmstudio"}}
+{"type":"turn_context","payload":{"cwd":"/w/svc","model":"qwen3-coder"}}
+{"type":"response_item","payload":{"type":"message","role":"user","content":[{"type":"input_text","text":"# AGENTS.md instructions, not a prompt"}]}}
+{"type":"event_msg","payload":{"type":"item_completed","item":{"type":"UserMessage","content":[{"type":"text","text":"Add a notes helper for the parser"}]}}}
+{"type":"response_item","payload":{"type":"custom_tool_call","name":"exec","input":` + string(scriptJSON) + `}}
+`
+	s, err := ReadCodex(strings.NewReader(in))
+	if err != nil {
+		t.Fatal(err)
+	}
+	if len(s.Prompts) != 1 || s.Prompts[0].Type != Feature {
+		t.Fatalf("prompts = %+v", s.Prompts)
+	}
+	if p := s.Prompts[0]; p.ExploresBeforeEdit != 1 || p.Explores != 1 || p.Checks != 1 || p.Edits != 1 {
+		t.Errorf("activity = %+v", p)
+	}
+	if !s.Models["lmstudio/qwen3-coder"] {
+		t.Errorf("models = %v, want the local provider prefixed", s.Models)
+	}
+	if !s.Edits["/w/svc/notes_helper.py"]["def describe_notes():"] {
+		t.Errorf("edits = %v", s.Edits)
+	}
+}
+
+func TestDiscoverCopilotChat(t *testing.T) {
+	user := t.TempDir()
+	ws := filepath.Join(user, "workspaceStorage", "abc123")
+	if err := os.MkdirAll(filepath.Join(ws, "chatSessions"), 0o755); err != nil {
+		t.Fatal(err)
+	}
+	files := map[string]string{
+		"workspace.json":             `{"folder":"file:///w/my%20app"}`,
+		"chatSessions/one.jsonl":     "{}",
+		"chatSessions/two.json":      "{}",
+		"chatSessions/notes.txt":     "ignored",
+		"chatEditingSessions/x.json": "ignored",
+	}
+	for name, body := range files {
+		path := filepath.Join(ws, name)
+		if err := os.MkdirAll(filepath.Dir(path), 0o755); err != nil {
+			t.Fatal(err)
+		}
+		if err := os.WriteFile(path, []byte(body), 0o600); err != nil {
+			t.Fatal(err)
+		}
+	}
+	got, err := Discover(Dirs{Claude: t.TempDir(), Codex: t.TempDir(), VSCode: []string{user, filepath.Join(t.TempDir(), "missing")}}, time.Time{})
+	if err != nil {
+		t.Fatal(err)
+	}
+	if len(got) != 2 || got[0].Agent != "copilot-vscode" || got[0].Cwd != filepath.FromSlash("/w/my app") {
+		t.Errorf("transcripts = %+v", got)
+	}
+}
+
+func TestReadClaudeReviewActivity(t *testing.T) {
+	in := `{"type":"user","message":{"content":"Add a retry to the upload step in upload.go"}}
+{"type":"assistant","message":{"content":[{"type":"tool_use","id":"a","name":"Edit","input":{"file_path":"/w/upload.go","old_string":"x","new_string":"y"}}]}}
+{"type":"user","message":{"content":[{"type":"tool_result","tool_use_id":"a","is_error":true,"content":"The user doesn't want to proceed with this tool use. The tool use was rejected."}]}}
+{"type":"assistant","message":{"content":[{"type":"tool_use","id":"b","name":"Edit","input":{"file_path":"/w/upload.go","old_string":"x","new_string":"z"}}]}}
+{"type":"user","message":{"content":[{"type":"tool_result","tool_use_id":"b","content":"ok"}]},"toolUseResult":{"userModified":true,"structuredPatch":[{"lines":["+retryUpload(ctx, file)"]}]}}
+{"type":"assistant","message":{"content":[{"type":"tool_use","id":"c","name":"Edit","input":{"file_path":"/w/upload.go","old_string":"x","new_string":"w"}}]}}
+{"type":"user","message":{"content":[{"type":"tool_result","tool_use_id":"c","is_error":true,"content":"String to replace not found"}]}}
+`
+	s, err := ReadClaude(strings.NewReader(in))
+	if err != nil {
+		t.Fatal(err)
+	}
+	// One rejection and one edit the user changed; a failed edit is not review.
+	if p := s.Prompts[0]; p.Edits != 3 || p.Reviewed != 2 {
+		t.Errorf("prompt = %+v, want 3 proposed edits and 2 reviewed", p)
+	}
+	g := Grade([]Session{s})
+	if g.Edits != 3 || g.Reviewed != 2 {
+		t.Errorf("grades = %+v", g)
+	}
+}
+
+// A transcript with only fallback prompts keeps the edits and checks after them.
+func TestReadCodexFallbackPromptsRecordActivity(t *testing.T) {
+	in := `{"timestamp":"2026-10-02T09:00:00Z","type":"session_meta","payload":{"cwd":"/w/svc"}}
+{"type":"response_item","payload":{"type":"message","role":"user","content":[{"type":"input_text","text":"<environment_context>injected</environment_context>"}]}}
+{"type":"response_item","payload":{"type":"message","role":"user","content":[{"type":"input_text","text":"Fix the crash in the parser"}]}}
+{"type":"response_item","payload":{"type":"custom_tool_call","name":"apply_patch","input":"*** Begin Patch\n*** Update File: parser.py\n@@\n-    return data[0]\n+    return None\n*** End Patch"}}
+{"type":"response_item","payload":{"type":"function_call","arguments":"{\"command\":[\"bash\",\"-lc\",\"pytest -q\"]}"}}
+`
+	s, err := ReadCodex(strings.NewReader(in))
+	if err != nil {
+		t.Fatal(err)
+	}
+	if len(s.Prompts) != 1 || s.Prompts[0].Edits != 1 || s.Prompts[0].Checks != 1 {
+		t.Errorf("prompts = %+v, want one with an edit and a check", s.Prompts)
+	}
+}
+
+// Folder names with glob characters are listed, not read as patterns.
+func TestDiscoverCopilotInFoldersWithGlobCharacters(t *testing.T) {
+	user := filepath.Join(t.TempDir(), "Code [1]", "User")
+	chat := filepath.Join(user, "workspaceStorage", "ws[a]", "chatSessions", "s.json")
+	if err := os.MkdirAll(filepath.Dir(chat), 0o755); err != nil {
+		t.Fatal(err)
+	}
+	if err := os.WriteFile(chat, []byte(`{"requests":[]}`), 0o644); err != nil {
+		t.Fatal(err)
+	}
+	got, err := Discover(Dirs{VSCode: []string{user}}, time.Time{})
+	if err != nil || len(got) != 1 || got[0].Path != chat {
+		t.Errorf("Discover = %+v, %v; want the one chat session", got, err)
+	}
+}
+
+// A stray file beside the workspaces, such as macOS's .DS_Store, once ended
+// discovery with "not a directory".
+func TestDiscoverCopilotSkipsStrayFiles(t *testing.T) {
+	user := filepath.Join(t.TempDir(), "User")
+	chat := filepath.Join(user, "workspaceStorage", "ws", "chatSessions", "s.json")
+	if err := os.MkdirAll(filepath.Dir(chat), 0o755); err != nil {
+		t.Fatal(err)
+	}
+	for _, f := range []string{chat, filepath.Join(user, "workspaceStorage", ".DS_Store")} {
+		if err := os.WriteFile(f, []byte(`{"requests":[]}`), 0o644); err != nil {
+			t.Fatal(err)
+		}
+	}
+	got, err := Discover(Dirs{VSCode: []string{user}}, time.Time{})
+	if err != nil || len(got) != 1 || got[0].Path != chat {
+		t.Errorf("Discover = %+v, %v; want the one chat session", got, err)
+	}
+}
+
+func TestCopilotSessionSizeIsCapped(t *testing.T) {
+	big := strings.NewReader(`{"requests":[` + strings.Repeat(" ", maxCopilotBytes) + `]}`)
+	if _, err := ReadCopilotChat(big, ""); err == nil {
+		t.Error("a session over the cap was read")
+	}
+}

@@ -1,0 +1,34 @@
+name: AddressSanitizer
+
+# A dependency update can bring a new tree-sitter grammar, which is C and
+# parses attackers' files in the hosted scanner. The nightly fuzz job runs the
+# parsers with AddressSanitizer, but only after a change has merged; this runs
+# the same check on the pull request itself.
+on:
+  pull_request:
+    paths:
+      - go.mod
+      - go.sum
+      - third_party/**
+      - parsing/**
+
+permissions:
+  contents: read
+
+jobs:
+  asan:
+    runs-on: ubuntu-24.04
+    timeout-minutes: 20
+    env:
+      ASAN_OPTIONS: detect_leaks=0
+    steps:
+      - name: Check out repository
+        uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7.0.1
+        with:
+          persist-credentials: false
+      - name: Set up Go from go.mod
+        uses: actions/setup-go@b7ad1dad31e06c5925ef5d2fc7ad053ef454303e # v7.0.0
+        with:
+          go-version-file: go.mod
+      - name: Parser and analyzer tests with AddressSanitizer
+        run: go test -asan -count=1 ./parsing ./analyzers/... ./vulns

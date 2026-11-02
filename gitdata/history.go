@@ -1,0 +1,298 @@
+package gitdata
+
+import (
+	"bufio"
+	"bytes"
+	"context"
+	"errors"
+	"io/fs"
+	"os"
+	"os/exec"
+	"path/filepath"
+	"regexp"
+	"strconv"
+	"strings"
+	"time"
+)
+
+// AddedLines returns the lines each non-merge commit by one of emails added, per
+// path. Renames are followed, so moving a file does not count as adding it. In a
+// shallow clone the oldest commits have no parent to compare with, so they would
+// count every file as added; they are left out.
+func (r Repo) AddedLines(ctx context.Context, emails []string) (map[string]map[string]int, error) {
+	args := []string{"log", "--no-merges", "-M", "--numstat", "--format=%x1e%H"}
+	args = append(args, authorArgs(emails)...)
+	boundary, err := r.shallowBoundary(ctx)
+	if err != nil {
+		return nil, err
+	}
+	args = append(args, boundary...)
+	out, err := r.git(ctx, append(args, "HEAD")...)
+	if err != nil {
+		return nil, err
+	}
+	added := map[string]map[string]int{}
+	for _, rec := range strings.Split(string(out), "\x1e") {
+		lines := strings.Split(strings.TrimSpace(rec), "\n")
+		if len(lines) == 0 || lines[0] == "" {
+			continue
+		}
+		perPath := map[string]int{}
+		for _, l := range lines[1:] {
+			fields := strings.SplitN(l, "\t", 3)
+			if len(fields) != 3 {
+				continue
+			}
+			n, err := strconv.Atoi(fields[0])
+			if err != nil { // "-" for binary files
+				continue
+			}
+			perPath[renamedTo(unquotePath(fields[2]))] += n
+		}
+		added[lines[0]] = perPath
+	}
+	return added, nil
+}
+
+// shallowBoundary returns "^hash" for each of a shallow clone's oldest commits,
+// to leave them out of a log, and nothing for a full clone. The shallow file can
+// list commits the clone does not have, which --ignore-missing drops.
+func (r Repo) shallowBoundary(ctx context.Context) ([]string, error) {
+	path, err := r.git(ctx, "rev-parse", "--git-path", "shallow")
+	if err != nil {
+		return nil, err
+	}
+	p := strings.TrimSpace(string(path))
+	if !filepath.IsAbs(p) {
+		p = filepath.Join(r.Dir, p)
+	}
+	data, err := os.ReadFile(p)
+	if errors.Is(err, fs.ErrNotExist) {
+		return nil, nil
+	}
+	if err != nil {
+		return nil, err
+	}
+	var hashes []string
+	for _, h := range strings.Fields(string(data)) {
+		if (len(h) == 40 || len(h) == 64) && isHex(h) { // only hashes reach git's arguments
+			hashes = append(hashes, h)
+		}
+	}
+	if len(hashes) == 0 {
+		return nil, nil
+	}
+	out, err := r.git(ctx, append([]string{"rev-list", "--no-walk", "--ignore-missing"}, hashes...)...)
+	if err != nil {
+		return nil, err
+	}
+	var not []string
+	for _, h := range strings.Fields(string(out)) {
+		not = append(not, "^"+h)
+	}
+	return not, nil
+}
+
+var (
+	braceRename = regexp.MustCompile(`\{[^{}]* => ([^{}]*)\}`)
+	slashes     = regexp.MustCompile(`/{2,}`)
+)
+
+// unquotePath decodes a path git quoted, such as "a\tb.go", and returns other
+// paths unchanged. Git's escapes are C's, which strconv.Unquote also reads.
+func unquotePath(p string) string {
+	if len(p) >= 2 && p[0] == '"' {
+		if u, err := strconv.Unquote(p); err == nil {
+			return u
+		}
+	}
+	return p
+}
+
+// renamedTo returns the new path of a numstat rename such as "a/{b => c}/d" or
+// "old => new".
+func renamedTo(p string) string {
+	if strings.Contains(p, "{") {
+		return slashes.ReplaceAllString(braceRename.ReplaceAllString(p, "$1"), "/")
+	}
+	if _, after, ok := strings.Cut(p, " => "); ok {
+		return after
+	}
+	return p
+}
+
+// TouchedPaths returns the current paths of files that a non-merge commit by one
+// of emails ever changed, following later renames by anyone, so a file the user
+// wrote that someone else renamed still counts.
+func (r Repo) TouchedPaths(ctx context.Context, emails []string) (map[string]bool, error) {
+	args := []string{"log", "--no-merges", "--name-only", "--format="}
+	args = append(args, authorArgs(emails)...)
+	out, err := r.git(ctx, append(args, "HEAD")...)
+	if err != nil {
+		return nil, err
+	}
+	touched := map[string]bool{}
+	for _, p := range strings.Split(string(out), "\n") {
+		if p != "" {
+			touched[unquotePath(p)] = true
+		}
+	}
+	return r.followRenames(ctx, touched)
+}
+
+// ChangedPaths returns the current paths of files that any of the given
+// non-merge commits changed, following later renames by anyone.
+func (r Repo) ChangedPaths(ctx context.Context, commits map[string]bool) (map[string]bool, error) {
+	changed := map[string]bool{}
+	if len(commits) == 0 {
+		return changed, nil
+	}
+	out, err := r.git(ctx, "log", "--no-merges", "--name-only", "--format=%x1e%H", "HEAD")
+	if err != nil {
+		return nil, err
+	}
+	for _, rec := range strings.Split(string(out), "\x1e") {
+		lines := strings.Split(strings.TrimSpace(rec), "\n")
+		if !commits[lines[0]] {
+			continue
+		}
+		for _, p := range lines[1:] {
+			if p != "" {
+				changed[unquotePath(p)] = true
+			}
+		}
+	}
+	return r.followRenames(ctx, changed)
+}
+
+// followRenames adds to paths the later names of any of them that someone
+// renamed, and returns it.
+func (r Repo) followRenames(ctx context.Context, touched map[string]bool) (map[string]bool, error) {
+	if len(touched) == 0 {
+		return touched, nil
+	}
+	// Renames by any author, newest first: "R100\told\tnew".
+	out, err := r.git(ctx, "log", "--no-merges", "-M", "--name-status", "--diff-filter=R", "--format=", "HEAD")
+	if err != nil {
+		return nil, err
+	}
+	renamed := map[string]string{}
+	for _, l := range strings.Split(string(out), "\n") {
+		if f := strings.Split(l, "\t"); len(f) == 3 && strings.HasPrefix(f[0], "R") {
+			renamed[unquotePath(f[1])] = unquotePath(f[2])
+		}
+	}
+	for p := range touched {
+		for range 100 { // bounded, in case of rename cycles
+			next, ok := renamed[p]
+			if !ok || touched[next] {
+				break
+			}
+			touched[next] = true
+			p = next
+		}
+	}
+	return touched, nil
+}
+
+// FixCommit is a non-merge commit whose subject marks a bug fix.
+type FixCommit struct {
+	Hash string
+	Time time.Time
+}
+
+// fixSubject matches commit subjects that mark a fix, including Conventional
+// Commits ("fix: ..."), "fixes #12", "bugfix", "hotfix", and reverts.
+var fixSubject = regexp.MustCompile(`(?i)\b(fix(es|ed|ing)?|bug ?fix|hotfix|bug|revert)\b`)
+
+// FixCommits returns the fix commits reachable from HEAD, by any author.
+func (r Repo) FixCommits(ctx context.Context) ([]FixCommit, error) {
+	out, err := r.git(ctx, "log", "--no-merges", "--format=%H%x1f%at%x1f%s", "HEAD")
+	if err != nil {
+		return nil, err
+	}
+	var fixes []FixCommit
+	for _, line := range strings.Split(string(out), "\n") {
+		fields := strings.SplitN(line, "\x1f", 3)
+		if len(fields) != 3 || !fixSubject.MatchString(fields[2]) {
+			continue
+		}
+		secs, err := strconv.ParseInt(fields[1], 10, 64)
+		if err != nil {
+			continue
+		}
+		fixes = append(fixes, FixCommit{Hash: fields[0], Time: time.Unix(secs, 0)})
+	}
+	return fixes, nil
+}
+
+var hunkHeader = regexp.MustCompile(`^@@ -(\d+)(?:,(\d+))? `)
+
+// ErrNoParent marks a commit FixedLines cannot trace: a root commit, or the
+// oldest commit of a shallow clone, which has no parent to blame.
+var ErrNoParent = errors.New("the commit has no parent to compare with")
+
+// FixedLines maps each commit that last changed a line the fix removed or
+// rewrote to the number of such lines, for paths keep accepts. This is the SZZ
+// method: the fix's parent is blamed for the lines the fix touched.
+func (r Repo) FixedLines(ctx context.Context, fix string, keep func(path string) bool) (map[string]int, error) {
+	if _, err := r.git(ctx, "rev-parse", "--verify", "--quiet", fix+"^"); err != nil {
+		// --verify --quiet exits 1 without output when the parent is missing.
+		if exit, ok := errors.AsType[*exec.ExitError](err); ok && exit.ExitCode() == 1 {
+			return nil, ErrNoParent
+		}
+		return nil, err
+	}
+	out, err := r.git(ctx, "diff", "-U0", "-M", "--no-color", "--no-ext-diff", "--no-textconv", fix+"^", fix)
+	if err != nil {
+		return nil, err
+	}
+	ranges := map[string][]string{} // old path → "-L start,+count" arguments
+	path, header := "", false
+	for _, line := range strings.Split(string(out), "\n") {
+		switch {
+		// A file's --- and +++ lines follow its diff --git header; inside its
+		// hunks, a removed line such as an SQL or Lua comment ("-- note")
+		// reads as "--- note" and must not end the file.
+		case strings.HasPrefix(line, "diff --git "):
+			path, header = "", true
+		case header && strings.HasPrefix(line, "--- "):
+			if p, ok := strings.CutPrefix(unquotePath(strings.TrimPrefix(line, "--- ")), "a/"); ok && keep(p) {
+				path = p
+			}
+		case strings.HasPrefix(line, "@@ "):
+			header = false
+			m := hunkHeader.FindStringSubmatch(line)
+			if path == "" || m == nil {
+				continue
+			}
+			count := 1
+			if m[2] != "" {
+				count, _ = strconv.Atoi(m[2])
+			}
+			if count > 0 {
+				ranges[path] = append(ranges[path], "-L", m[1]+",+"+strconv.Itoa(count))
+			}
+		}
+	}
+	fixed := map[string]int{}
+	for p, args := range ranges {
+		blame := append([]string{"blame", "--porcelain", "-w", "--no-textconv"}, args...)
+		out, err := r.git(ctx, append(blame, fix+"^", "--", p)...)
+		if err != nil {
+			return nil, err
+		}
+		scanner := bufio.NewScanner(bytes.NewReader(out))
+		scanner.Buffer(make([]byte, 1024*1024), 16*1024*1024)
+		for scanner.Scan() {
+			fields := strings.Fields(scanner.Text())
+			if len(fields) >= 3 && (len(fields[0]) == 40 || len(fields[0]) == 64) && isHex(fields[0]) {
+				fixed[fields[0]]++
+			}
+		}
+		if err := scanner.Err(); err != nil {
+			return nil, err
+		}
+	}
+	return fixed, nil
+}

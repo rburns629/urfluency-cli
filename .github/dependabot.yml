@@ -1,0 +1,65 @@
+# Keeps the tree-sitter grammars, the CI check tools, and the workflow actions
+# current. The grammars parse untrusted repositories in the hosted scanner, and
+# their C fixes rarely reach Go's vulnerability database, so govulncheck alone
+# would miss them. Updates wait two weeks after release (the supply-chain rule
+# in PROJECT_CONTEXT.md) and arrive grouped, once a week.
+#
+# Not covered: the Swift grammar is vendored under third_party/tree-sitter-swift
+# and updated by hand, as its README describes. Test lockfiles under
+# vulns/testdata pin vulnerable versions on purpose; Dependabot does not update
+# them, but alerts about them are dismissed in the repository's settings.
+version: 2
+updates:
+  - package-ecosystem: gomod
+    directory: /
+    schedule:
+      interval: weekly
+    cooldown:
+      default-days: 14
+    # The PowerShell grammar's v1.2.0 is a stray 2024 tag with no go.mod,
+    # older than its current 0.26 releases. Go ranks it newest, and Dependabot
+    # failing on it stopped the whole Go update group.
+    ignore:
+      - dependency-name: github.com/airbus-cert/tree-sitter-powershell
+        versions: [">= 1.0.0"]
+    groups:
+      # Dart's grammar has no releases and is pinned to a reviewed commit, so
+      # its updates are reviewed on their own.
+      dart-grammar:
+        patterns: ["github.com/UserNobody14/tree-sitter-dart"]
+      go-modules-minor:
+        patterns: ["*"]
+        update-types: ["minor", "patch"]
+      go-modules-major:
+        patterns: ["*"]
+        update-types: ["major"]
+
+  # staticcheck and govulncheck, pinned as tools so CI and Dependabot agree.
+  - package-ecosystem: gomod
+    directory: /tools
+    schedule:
+      interval: weekly
+    cooldown:
+      default-days: 14
+    groups:
+      check-tools:
+        patterns: ["*"]
+
+  # The Go and Alpine image Linux release builds run in.
+  - package-ecosystem: docker
+    directory: /scripts/release
+    schedule:
+      interval: weekly
+    cooldown:
+      default-days: 14
+
+  # The actions the workflows pin by commit.
+  - package-ecosystem: github-actions
+    directory: /
+    schedule:
+      interval: weekly
+    cooldown:
+      default-days: 14
+    groups:
+      actions:
+        patterns: ["*"]
