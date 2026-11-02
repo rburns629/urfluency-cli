@@ -195,7 +195,9 @@ func New(git, folders analysis.Result, grades *sessions.Grades) Facts {
 		s := FromResult(git)
 		f.Git = &s
 	}
-	if len(folders.Languages) > 0 || folders.OwnedLines > 0 {
+	// A folder counts as a project even with no code in it, and its tools,
+	// such as a Dockerfile, still count.
+	if folders.Repos > 0 || len(folders.Languages) > 0 {
 		s := FromResult(folders)
 		f.Folders = &s
 	}

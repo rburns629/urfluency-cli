@@ -59,8 +59,17 @@ func scan(t *testing.T) analysis.Result {
 
 // build makes the parts of a report an upload carries, as the CLI does.
 func build(git analysis.Result, s *facts.Sessions) []byte {
+	return buildWith(git, analysis.Result{}, false, s)
+}
+
+// buildWith is build, with a scan of folders without Git when withFolders.
+func buildWith(git, folders analysis.Result, withFolders bool, s *facts.Sessions) []byte {
 	r := report.Build(git, since, false)
-	r.Combined = report.BuildCombined(git, analysis.Result{})
+	if withFolders {
+		r.Unversioned = report.BuildUnversioned(folders, false)
+		r.Dismissed += folders.Dismissed
+	}
+	r.Combined = report.BuildCombined(git, folders)
 	if s != nil {
 		r.Prompting = report.BuildPrompting(*s)
 	}
@@ -102,6 +111,37 @@ func TestFactsScoreLikeTheScan(t *testing.T) {
 	want, got := build(res, &sessions), build(back.Git.Result(), back.Sessions)
 	if !bytes.Equal(want, got) {
 		t.Errorf("scored from facts:\n%s\nscored from the scan:\n%s", got, want)
+	}
+}
+
+// A folder without Git and without code is still a project, with its tools.
+func TestFactsKeepFoldersWithoutCode(t *testing.T) {
+	dir := t.TempDir()
+	for name, body := range map[string]string{"README.md": "# Notes\n", "Dockerfile": "FROM alpine:3.20\nRUN echo hi\n"} {
+		if err := os.WriteFile(filepath.Join(dir, name), []byte(body), 0o644); err != nil {
+			t.Fatal(err)
+		}
+	}
+	folders, err := analysis.ScanDir(context.Background(), dir, analysis.Options{Emails: gitdata.Everyone, Since: since})
+	if err != nil {
+		t.Fatal(err)
+	}
+	folders = analysis.Merge([]string{"notes"}, []analysis.Result{folders})
+	f := facts.New(analysis.Result{}, folders, nil)
+	if f.Folders == nil {
+		t.Fatalf("the folder scan was dropped: %+v", folders)
+	}
+	data, _ := json.Marshal(f)
+	var back facts.Facts
+	if err := json.Unmarshal(data, &back); err != nil {
+		t.Fatal(err)
+	}
+	want, got := buildWith(analysis.Result{}, folders, true, nil), buildWith(analysis.Result{}, back.Folders.Result(), true, nil)
+	if !bytes.Equal(want, got) {
+		t.Errorf("scored from facts:\n%s\nscored from the scan:\n%s", got, want)
+	}
+	if !bytes.Contains(want, []byte(`"projects_without_git":1`)) {
+		t.Errorf("the scan did not count the folder: %s", want)
 	}
 }
 
