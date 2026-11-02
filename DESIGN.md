@@ -985,9 +985,14 @@ Owners connect repositories through a urFluency GitHub App:
 - **Public repositories** are analyzed on the server, in the same isolated job as
   safety scans, when a release is published and when the owner asks (with a
   daily cap), not at every push, which would tie cost to activity (decided
-  2026-10-28). Every author's code is rated (`score.Repo`), with history since
-  365 days for the practice ratings (Verified tier).
-- **Private repositories** use the urFluency GitHub Action (`action.yml`), which
+  2026-10-28). On Pro, an hourly sweep also rates them after new commits to the
+  default branch and at least monthly, in the spare-capacity lane (2026-11-02).
+  Every author's code is rated (`score.Repo`) over the repository's whole
+  history (Verified tier; until 2026-11-02, the last 365 days). The service
+  scores the counts with its official model.
+- **Private repositories** are rated on the server too on Pro, weekly and when
+  the owner asks, with a token for that one repository. Otherwise they use the
+  urFluency GitHub Action (`action.yml`), which
   runs `urfluency attest` in CI: it rates the checkout and sends only the
   summary and combined result, like an upload, with the job's GitHub OIDC token
   (audience `https://api.urfluency.com`). Code never leaves the CI runner
