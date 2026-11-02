@@ -9,7 +9,7 @@ sums up the release in one line. Each change is a bullet that starts with
 `New:`, `Improved:`, `Fixed:`, or `Security:`, written for people who use the
 CLI rather than for people who work on it.
 
-## v1.0.0 (2026-11-02)
+## v1.0.1 (2026-11-02)
 
 Official scores, and a new home and license. Uploads need this version or later.
 
