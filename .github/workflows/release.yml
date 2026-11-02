@@ -108,8 +108,10 @@ jobs:
         uses: actions/setup-go@b7ad1dad31e06c5925ef5d2fc7ad053ef454303e # v7.0.0
         with:
           go-version-file: go.mod
+      # Timing tests, which compare parse times at two sizes, are left to CI:
+      # on a slow release runner they fail on noise, not on a regression.
       - name: Test
-        run: go test -count=1 ./...
+        run: go test -short -count=1 ./...
       - name: Build archive
         run: scripts/build-release.sh "${GITHUB_REF_NAME#v}" dist
       - name: Upload archive
