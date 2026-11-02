@@ -6,7 +6,7 @@
 // label are dropped; findings become counts per rule. What is left are counts,
 // months, and names from the catalog: languages, rules, frameworks, tools,
 // libraries, and platforms. Result turns facts back into a scan result, so the
-// same report code can score them.
+// same report code can score them; reports take Sessions as they are.
 package facts
 
 import (
@@ -200,7 +200,7 @@ func New(git, folders analysis.Result, grades *sessions.Grades) Facts {
 		f.Folders = &s
 	}
 	if grades != nil {
-		s := fromGrades(*grades)
+		s := FromGrades(*grades)
 		f.Sessions = &s
 	}
 	return f
@@ -346,20 +346,8 @@ func (s Scan) Result() analysis.Result {
 	return r
 }
 
-// Grades turns the sessions back into prompting grades.
-func (s Sessions) Grades() sessions.Grades {
-	g := sessions.Grades{Sessions: s.Sessions, Tasks: s.Tasks, Edits: s.Edits, Reviewed: s.Reviewed, EditTasks: s.EditTasks,
-		GateTasks: s.GateTasks, Style: s.Style}
-	if s.Rules != nil {
-		g.Rules = map[string]sessions.Tally{}
-		for k, t := range s.Rules {
-			g.Rules[k] = sessions.Tally{Applicable: t.Applicable, Missed: t.Missed}
-		}
-	}
-	return g
-}
-
-func fromGrades(g sessions.Grades) Sessions {
+// FromGrades turns prompting grades into their facts.
+func FromGrades(g sessions.Grades) Sessions {
 	s := Sessions{Sessions: g.Sessions, Tasks: g.Tasks, Edits: g.Edits, Reviewed: g.Reviewed, EditTasks: g.EditTasks,
 		GateTasks: g.GateTasks, Style: g.Style}
 	if g.Rules != nil {

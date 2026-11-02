@@ -9,6 +9,7 @@ import (
 
 	"github.com/rburns629/urfluency-cli/analysis"
 	_ "github.com/rburns629/urfluency-cli/analyzers/golang"
+	"github.com/rburns629/urfluency-cli/facts"
 	"github.com/rburns629/urfluency-cli/internal/sessions"
 )
 
@@ -136,7 +137,7 @@ func TestBuildPrompting(t *testing.T) {
 		"prompt.needed-correction": {Applicable: 10, Missed: 1},
 		"prompt.retired-rule":      {Applicable: 10, Missed: 9}, // not in the catalog, so ignored
 	}}
-	p := BuildPrompting(g)
+	p := BuildPrompting(facts.FromGrades(g))
 	if len(p.Rules) != 2 || len(p.Weaknesses) != 1 || p.Weaknesses[0].ID != "prompt.unverified-change" || p.Weaknesses[0].Share != 0.63 {
 		t.Errorf("weaknesses = %+v", p.Weaknesses)
 	}
@@ -146,7 +147,7 @@ func TestBuildPrompting(t *testing.T) {
 	if !reflect.DeepEqual(p.Focus, []string{"prompt.unverified-change"}) {
 		t.Errorf("focus = %v", p.Focus)
 	}
-	small := BuildPrompting(sessions.Grades{Rules: map[string]sessions.Tally{"prompt.unverified-change": {Applicable: 3, Missed: 3}}})
+	small := BuildPrompting(facts.Sessions{Rules: map[string]facts.Tally{"prompt.unverified-change": {Applicable: 3, Missed: 3}}})
 	if len(small.Weaknesses) != 0 {
 		t.Errorf("too few tasks should not be judged: %+v", small.Weaknesses)
 	}
@@ -164,7 +165,7 @@ func TestBuildAI(t *testing.T) {
 		t.Errorf("ai = %+v", a)
 	}
 	var b strings.Builder
-	if err := WriteText(&b, Report{Repos: 2, AI: a, Prompting: BuildPrompting(sessions.Grades{})}); err != nil {
+	if err := WriteText(&b, Report{Repos: 2, AI: a, Prompting: BuildPrompting(facts.Sessions{})}); err != nil {
 		t.Fatal(err)
 	}
 	for _, want := range []string{"2 repositories", "Share (never scored): 600 of 1000 owned code lines (60%) from commits marked AI-assisted (claude 600)",

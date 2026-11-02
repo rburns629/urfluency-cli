@@ -10,7 +10,6 @@ import (
 
 	"github.com/rburns629/urfluency-cli/analysis"
 	"github.com/rburns629/urfluency-cli/facts"
-	"github.com/rburns629/urfluency-cli/internal/sessions"
 	"github.com/rburns629/urfluency-cli/rules"
 )
 
@@ -442,7 +441,7 @@ func buildLanguage(lr analysis.LanguageResult, withLocations bool) Language {
 }
 
 // BuildPrompting turns session grades into strengths, weaknesses, and focus points.
-func BuildPrompting(g sessions.Grades) *Prompting {
+func BuildPrompting(g facts.Sessions) *Prompting {
 	p := &Prompting{Sessions: g.Sessions, Tasks: g.Tasks, Rules: []PromptRule{}, Weaknesses: []PromptRule{}, Strengths: []string{}, Focus: []string{},
 		Edits: g.Edits, Reviewed: g.Reviewed, EditTasks: g.EditTasks, GateTasks: map[string]int{}}
 	for gate, n := range g.GateTasks {
