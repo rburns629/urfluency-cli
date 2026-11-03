@@ -3,6 +3,7 @@ package python
 import (
 	"reflect"
 	"sort"
+	"strings"
 	"testing"
 
 	"github.com/rburns629/urfluency-cli/analysis"
@@ -13,7 +14,7 @@ func TestSecurityRules(t *testing.T) {
 def run(cursor: object, x: str, cmd: str, b: bytes) -> None:
     cursor.execute(f"SELECT * FROM t WHERE id = {x}")
     cursor.execute("SELECT * FROM t WHERE id = %s" % x)
-    cursor.execute("SELECT {}".format(x))
+    cursor.execute("SELECT * FROM t WHERE name = '{}'".format(x))
     cursor.execute("SELECT * FROM t WHERE id = %s", (x,))
     eval(x)
     eval("1 + 1")
@@ -129,5 +130,32 @@ func TestFrameworkDetection(t *testing.T) {
 	sort.Strings(got)
 	if want := []string{"django", "fastapi", "pytorch", "scikit-learn"}; !reflect.DeepEqual(got, want) {
 		t.Errorf("got %v, want %v", got, want)
+	}
+}
+
+// Identifiers formatted into SQL, as database backends must, and queries in
+// tests are not injection; a value spliced where SQL expects one is.
+func TestSQLValuePositionsAndTests(t *testing.T) {
+	src := `def q(cursor, table, columns, x, qn):
+    cursor.execute("SELECT %s FROM %s" % (columns, qn(table)))
+    cursor.execute(f"DELETE FROM {table} WHERE id = %s", [x])
+    cursor.execute("SELECT {} FROM t".format(columns))
+    cursor.execute("SELECT * FROM " + table + " WHERE id = %s", [x])
+    cursor.execute(f"SELECT * FROM t WHERE name = '{x}'")
+`
+	var got []string
+	for _, f := range findings(t, "app/db.py", src) {
+		if strings.HasPrefix(f, "py.sql-string-built") {
+			got = append(got, f)
+		}
+	}
+	if len(got) != 1 || got[0] != "py.sql-string-built:6" {
+		t.Errorf("app: got %v, want only the quoted value on line 6", got)
+	}
+	tests := "import pickle, requests\ndef test_x(b):\n    pickle.loads(b)\n    requests.get('https://x', verify=False)\n"
+	for _, f := range findings(t, "tests/test_api.py", tests) {
+		if strings.HasPrefix(f, "py.unsafe") || strings.HasPrefix(f, "py.tls") {
+			t.Errorf("tests: got %s", f)
+		}
 	}
 }
