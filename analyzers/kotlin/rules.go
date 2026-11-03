@@ -28,15 +28,20 @@ func (c *checker) visit(n *ts.Node) bool {
 	return true
 }
 
+// benchmark reports benchmark sources, such as JMH's, which block and
+// launch freely to measure coroutines.
+func benchmark(p string) bool { return parsing.InDir(p, "benchmarks", "benchmark", "jmh") }
+
 func (c *checker) checkCall(call *ts.Node) {
 	receiver, name := c.callee(call)
 	switch {
 	case (name == "launch" || name == "async") && receiver != nil:
-		if r := c.tree.Text(receiver); r == "GlobalScope" || strings.HasSuffix(r, ".GlobalScope") {
+		if r := c.tree.Text(receiver); (r == "GlobalScope" || strings.HasSuffix(r, ".GlobalScope")) && !c.isTest && !benchmark(c.path) {
 			c.report("kotlin.global-scope", call)
 		}
 	case name == "runBlocking":
-		if !c.isTest && !c.inEntryPoint(call) {
+		// Benchmarks (JMH) block on purpose to measure a coroutine.
+		if !c.isTest && !c.inEntryPoint(call) && !benchmark(c.path) {
 			c.report("kotlin.run-blocking-in-production", call)
 		}
 	case sqlMethods[name] && receiver != nil:

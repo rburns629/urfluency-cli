@@ -15,6 +15,7 @@ CLI rather than for people who work on it.
 - Fixed: Folders named UnitTests, IntegrationTests, and FunctionalTests count as tests.
 - Fixed: PHP's security checks skip tests. php.include-variable-path and php.command-built report paths and commands built from request input, directly or through a variable, not from a program's own directories, configuration, or escaped arguments. php.sql-string-built reports an interpolated value where SQL expects one, not an expression that builds the statement, such as a column list or a CASE. Have I Been Pwned lookups and HTTP Digest authentication are not password storage.
 - Fixed: Ruby's security checks skip tests and specs, Redis and cache calls are not SQL, to_sql is escaped, class_eval and module_eval heredocs that define methods are reported only with request params, VERIFY_NONE behind a verification setting is the operator's choice, and commands in rake tasks and bin, exe, and script folders are developer tooling.
+- Fixed: kotlin.global-scope skips tests, and it and kotlin.run-blocking-in-production skip benchmarks, which launch and block to measure coroutines.
 
 ## v1.2.0 (2026-11-03)
 
