@@ -137,6 +137,120 @@ func (c *checker) isBuiltString(n *ts.Node) bool {
 	return false
 }
 
+// structuralNames name what builds a statement rather than a value in it:
+// tables, columns, aliases, quoted names (Django's qn), placeholder lists,
+// and SQL fragments.
+var structuralNames = []string{"table", "column", "col", "alias", "qn", "quote", "placeholder", "field", "sql", "join", "where", "order", "operator", "lookup"}
+
+func structural(expr string) bool {
+	e := strings.ToLower(expr)
+	for _, s := range structuralNames {
+		if strings.Contains(e, s) {
+			return true
+		}
+	}
+	return false
+}
+
+// splicesSQLValue reports whether a built query puts a value where SQL
+// expects one: inside quotes, after a comparison or LIKE, or in a list. A
+// table or column name, a quoted identifier, or a placeholder list formatted
+// in, as database backends and ORMs must, is not injection.
+func (c *checker) splicesSQLValue(n *ts.Node) bool {
+	switch n.Kind() {
+	case "string": // f-string
+		before := ""
+		for _, ch := range parsing.NamedChildren(n) {
+			switch ch.Kind() {
+			case "string_content", "escape_sequence":
+				before += c.tree.Text(ch)
+			case "interpolation":
+				if !structural(c.tree.Text(ch)) && sqlValuePosition(before) {
+					return true
+				}
+				before = ""
+			}
+		}
+		return false
+	case "binary_operator":
+		left, right := n.ChildByFieldName("left"), n.ChildByFieldName("right")
+		if parsing.HasToken(n, "%") && isStringNode(left) {
+			return formatSplicesValue(c.tree.Text(left), c.tree.Text(right))
+		}
+		if parsing.HasToken(n, "+") {
+			var parts []*ts.Node
+			var flatten func(*ts.Node)
+			flatten = func(x *ts.Node) {
+				if x.Kind() == "binary_operator" && parsing.HasToken(x, "+") {
+					flatten(x.ChildByFieldName("left"))
+					flatten(x.ChildByFieldName("right"))
+					return
+				}
+				parts = append(parts, x)
+			}
+			flatten(n)
+			before := ""
+			for _, p := range parts {
+				if isConstantString(p) {
+					before += strings.Trim(c.tree.Text(p), `"'`)
+					continue
+				}
+				if !structural(c.tree.Text(p)) && sqlValuePosition(before) {
+					return true
+				}
+				before = ""
+			}
+			return false
+		}
+		return c.splicesSQLValue(left)
+	case "call": // "...".format(...)
+		fn := n.ChildByFieldName("function")
+		args := n.ChildByFieldName("arguments")
+		if fn == nil || args == nil {
+			return true
+		}
+		return formatSplicesValue(strings.ReplaceAll(c.tree.Text(fn.ChildByFieldName("object")), "{}", "%s"), c.tree.Text(args))
+	}
+	return true
+}
+
+// formatSplicesValue reports whether a %-format puts a %s or %r in a value
+// position, unless the arguments are all structural names. %d cannot
+// inject.
+func formatSplicesValue(format, args string) bool {
+	if structural(args) {
+		return false
+	}
+	for i := 0; i+1 < len(format); i++ {
+		if format[i] != '%' {
+			continue
+		}
+		if format[i+1] == '%' {
+			i++
+			continue
+		}
+		if (format[i+1] == 's' || format[i+1] == 'r') && sqlValuePosition(format[:i]) {
+			return true
+		}
+	}
+	return false
+}
+
+// sqlValuePosition reports whether SQL text ending here expects a value
+// next: an open quote, or a comparison, LIKE, or list.
+func sqlValuePosition(before string) bool {
+	if strings.Count(strings.ReplaceAll(before, "''", ""), "'")%2 == 1 {
+		return true
+	}
+	t := strings.ToUpper(strings.TrimRight(before, " \t\n"))
+	for _, op := range []string{"=", "<", ">", " LIKE", "(", ","} {
+		if strings.HasSuffix(t, op) {
+			return true
+		}
+	}
+	return false
+}
+
 // isConstantString reports string literals without interpolation, and +
 // concatenations and parentheses of only those.
 func isConstantString(n *ts.Node) bool {
@@ -181,8 +295,12 @@ func (c *checker) checkCallSecurity(call *ts.Node) {
 		return nil
 	}()
 
+	// Tests build queries from fixtures, load pickles they wrote, and talk to
+	// local TLS servers; none of it reaches a user.
+	security := !c.isTest
 	switch {
-	case sqlMethods[lastPart(name)] && strings.Contains(name, ".") && first != nil && c.isBuiltString(first):
+	case !security:
+	case sqlMethods[lastPart(name)] && strings.Contains(name, ".") && first != nil && c.isBuiltString(first) && c.splicesSQLValue(first):
 		c.report("py.sql-string-built", call)
 	case (name == "eval" || name == "exec") && first != nil && c.isDynamic(first):
 		c.report("py.eval-exec", call)
@@ -196,7 +314,7 @@ func (c *checker) checkCallSecurity(call *ts.Node) {
 	case subprocesses[name] && c.keyword(call, "shell") == "True" && first != nil && c.isDynamic(first):
 		c.report("py.shell-injection", call)
 	}
-	if c.keyword(call, "verify") == "False" {
+	if security && c.keyword(call, "verify") == "False" {
 		c.report("py.tls-verify-disabled", call)
 	}
 	if c.frameworks["django"] && c.keyword(call, "null") == "True" {
