@@ -2,6 +2,7 @@ package kotlin
 
 import (
 	"context"
+	"strings"
 	"testing"
 
 	"github.com/rburns629/urfluency-cli/analysis"
@@ -51,7 +52,7 @@ fun build() = StringBuilder().apply { append("x") }.toString()
 	}
 	got := map[string]int{}
 	for _, f := range findings {
-		if f.Positive {
+		if f.Positive && !strings.HasPrefix(f.Rule, "evidence.") {
 			got[f.Rule]++
 		}
 	}

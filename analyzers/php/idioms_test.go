@@ -2,6 +2,7 @@ package php
 
 import (
 	"context"
+	"strings"
 	"testing"
 
 	"github.com/rburns629/urfluency-cli/analysis"
@@ -68,7 +69,7 @@ class Plain
 	}
 	got := map[string]int{}
 	for _, f := range findings {
-		if f.Positive {
+		if f.Positive && !strings.HasPrefix(f.Rule, "evidence.") {
 			got[f.Rule]++
 		}
 	}

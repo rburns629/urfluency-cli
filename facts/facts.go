@@ -71,6 +71,16 @@ type Language struct {
 	AssistedByRule   map[string]int   `json:"assisted_by_rule,omitempty"`
 	TestLines        int              `json:"test_lines"`
 	Idioms           map[string]Idiom `json:"idioms,omitempty"`
+	// Evidence is the logic the owned code holds; absent from CLIs before
+	// 1.1.0 and for code with no function the analyzer measured.
+	Evidence *Evidence `json:"evidence,omitempty"`
+}
+
+// Evidence is analysis.Evidence: owned functions and their cognitive
+// complexity.
+type Evidence struct {
+	Functions int `json:"functions"`
+	Branches  int `json:"branches"`
 }
 
 // Idiom is how often, and in how many files, owned code used an idiom.
@@ -240,6 +250,10 @@ func FromResult(r analysis.Result) Scan {
 				l.Idioms[k] = Idiom(u)
 			}
 		}
+		if lr.Evidence != nil {
+			e := Evidence(*lr.Evidence)
+			l.Evidence = &e
+		}
 		s.Languages = append(s.Languages, l)
 	}
 	for _, p := range r.PerRepo {
@@ -313,6 +327,10 @@ func (s Scan) Result() analysis.Result {
 			for k, u := range l.Idioms {
 				lr.Idioms[k] = analysis.IdiomUse(u)
 			}
+		}
+		if l.Evidence != nil {
+			e := analysis.Evidence(*l.Evidence)
+			lr.Evidence = &e
 		}
 		r.Languages = append(r.Languages, lr)
 	}

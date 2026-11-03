@@ -98,6 +98,7 @@ func analyze(ctx context.Context, files []analysis.File, typescript bool) ([]ana
 		parsing.Walk(tree.Root(), c.visitIdioms)
 		if !analysis.IsTestPath(f.Path) {
 			for _, fn := range parsing.Cognitive(tree, parsing.JavaScriptComplexity) {
+				findings = append(findings, analysis.EvidenceOf(f.Path, fn.Line, fn.Complexity)...)
 				if fn.Complexity > parsing.CognitiveThreshold {
 					findings = append(findings, analysis.Finding{Rule: "clean.cognitive-complexity", Path: f.Path, Line: fn.Line})
 				}

@@ -74,6 +74,9 @@ func (Analyzer) Analyze(ctx context.Context, files []analysis.File) ([]analysis.
 		parsing.Walk(tree.Root(), c.visit)
 		parsing.Walk(tree.Root(), c.visitIdioms)
 		for _, fn := range parsing.Cognitive(tree, Complexity) {
+			if !analysis.IsTestPath(f.Path) {
+				c.findings = append(c.findings, analysis.EvidenceOf(f.Path, fn.Line, fn.Complexity)...)
+			}
 			if fn.Complexity > parsing.CognitiveThreshold && !analysis.IsTestPath(f.Path) {
 				c.findings = append(c.findings, analysis.Finding{Rule: "clean.cognitive-complexity", Path: f.Path, Line: fn.Line})
 			}

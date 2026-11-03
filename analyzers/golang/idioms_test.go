@@ -2,6 +2,7 @@ package golang
 
 import (
 	"context"
+	"strings"
 	"testing"
 
 	"github.com/rburns629/urfluency-cli/analysis"
@@ -17,7 +18,7 @@ func positives(t *testing.T, a analysis.Analyzer, path, src string) map[string]i
 	}
 	got := map[string]int{}
 	for _, f := range findings {
-		if f.Positive {
+		if f.Positive && !strings.HasPrefix(f.Rule, "evidence.") {
 			got[f.Rule]++
 		}
 	}
@@ -28,6 +29,7 @@ func TestIdioms(t *testing.T) {
 	src := `package store
 
 import (
+	"strings"
 	"context"
 	"errors"
 	"fmt"

@@ -2,6 +2,7 @@ package cpp
 
 import (
 	"context"
+	"strings"
 	"testing"
 
 	"github.com/rburns629/urfluency-cli/analysis"
@@ -54,7 +55,7 @@ std::unique_ptr<Base> make() {
 	}
 	got := map[string]int{}
 	for _, f := range findings {
-		if f.Positive {
+		if f.Positive && !strings.HasPrefix(f.Rule, "evidence.") {
 			got[f.Rule]++
 		}
 	}

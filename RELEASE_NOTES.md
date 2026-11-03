@@ -9,6 +9,13 @@ sums up the release in one line. Each change is a bullet that starts with
 `New:`, `Improved:`, `Fixed:`, or `Security:`, written for people who use the
 CLI rather than for people who work on it.
 
+## v1.1.0 (2026-11-03)
+
+New Python checks for code that runs but does the wrong thing, and uploads that tell urfluency.com how much logic your code holds.
+
+- New: Python checks for a dataclass whose instances all compare equal because it has no fields, a `__getattr__` that never raises `AttributeError` (which breaks `hasattr`, `copy`, and pickling), an `except` that only re-raises, a mutable class attribute changed through `self`, and a test script that defines no tests. Each was checked against 14 well-known Python projects, about 10,600 files, where it found two real problems and no false alarms.
+- New: Each language's facts count its functions and their complexity on your own lines, so the official score can judge a small project by the logic it holds rather than its line count. Nothing about your code beyond those counts is sent.
+
 ## v1.0.3 (2026-11-02)
 
 Fewer false alarms from `urfluency check`, tested against 44 well-known open-source projects.

@@ -2,6 +2,7 @@ package swift
 
 import (
 	"context"
+	"strings"
 	"testing"
 
 	"github.com/rburns629/urfluency-cli/analysis"
@@ -72,7 +73,7 @@ struct CounterView: View {
 		t.Fatal(err)
 	}
 	for _, f := range fs {
-		if f.Positive {
+		if f.Positive && !strings.HasPrefix(f.Rule, "evidence.") {
 			got[f.Rule]++
 		}
 	}

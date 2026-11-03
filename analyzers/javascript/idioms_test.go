@@ -2,6 +2,7 @@ package javascript
 
 import (
 	"context"
+	"strings"
 	"testing"
 
 	"github.com/rburns629/urfluency-cli/analysis"
@@ -16,7 +17,7 @@ func idioms(t *testing.T, a analysis.Analyzer, path, src string) map[string]int 
 	}
 	got := map[string]int{}
 	for _, f := range findings {
-		if f.Positive {
+		if f.Positive && !strings.HasPrefix(f.Rule, "evidence.") {
 			got[f.Rule]++
 			if r, ok := rules.Lookup(f.Rule); !ok || r.Category != rules.Idiom {
 				t.Errorf("%s is not an idiom in the catalog", f.Rule)
