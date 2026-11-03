@@ -29,7 +29,7 @@ var (
 	// The safe sets are methods whose result can be interpolated: they escape
 	// or convert the value, or name schema objects from code.
 	sqlSafe = set("table_name", "quoted_table_name", "primary_key", "quote", "quote_column_name", "quote_table_name",
-		"sanitize_sql", "sanitize_sql_array", "sanitize_sql_for_conditions", "sanitize_sql_like", "to_i", "to_f")
+		"sanitize_sql", "sanitize_sql_array", "sanitize_sql_for_conditions", "sanitize_sql_like", "to_i", "to_f", "to_sql")
 	htmlSafe = set("h", "html_escape", "escape_html", "escapeHTML", "escape_once", "sanitize", "strip_tags",
 		"json_escape", "t", "translate", "link_to", "button_to", "mail_to", "content_tag", "image_tag", "render", "to_i")
 	shellSafe = set("shellescape", "shelljoin", "escape", "to_i")
@@ -59,12 +59,13 @@ func (c *checker) visit(n *ts.Node) bool {
 			c.report("ruby.debugging-call", n)
 		}
 	case "subshell":
-		if c.interpolated(n, shellSafe) {
+		if !c.isTest && c.interpolated(n, shellSafe) {
 			c.report("ruby.command-built", n)
 		}
 	case "scope_resolution":
 		if name := n.ChildByFieldName("name"); name != nil && c.tree.Text(name) == "VERIFY_NONE" {
-			if scope := n.ChildByFieldName("scope"); scope != nil && strings.TrimPrefix(c.tree.Text(scope), "::") == "OpenSSL::SSL" {
+			if scope := n.ChildByFieldName("scope"); scope != nil && strings.TrimPrefix(c.tree.Text(scope), "::") == "OpenSSL::SSL" &&
+				!c.isTest && !c.verifySwitch(n) {
 				c.report("ruby.ssl-verify-none", n)
 			}
 		}
@@ -84,15 +85,43 @@ func (c *checker) visit(n *ts.Node) bool {
 	return true
 }
 
+// verifySwitch reports VERIFY_NONE under a condition on a setting to skip
+// verification, such as `if Devise.ldap_tls_no_verify` or the else of
+// `if attribute('tls_verify')`: an option the operator turns on.
+func (c *checker) verifySwitch(n *ts.Node) bool {
+	p := c.tree.Parent(n)
+	for range 50 {
+		if p == nil {
+			return false
+		}
+		switch p.Kind() {
+		case "if", "unless", "if_modifier", "unless_modifier", "conditional", "elsif":
+			cond := strings.ToLower(c.tree.Text(p.ChildByFieldName("condition")))
+			if strings.Contains(cond, "verify") || strings.Contains(cond, "insecure") {
+				return true
+			}
+		}
+		p = c.tree.Parent(p)
+	}
+	return false
+}
+
 func (c *checker) checkCall(call *ts.Node) {
 	receiver, name := c.callee(call)
 	args := arguments(call)
 	if monkeyPatchMethods[name] && receiver != nil && coreClasses[strings.TrimPrefix(c.tree.Text(receiver), "::")] {
 		c.report("ruby.core-class-reopened", call)
 	}
+	if c.isTest { // tests build queries, commands, and code from fixtures
+		return
+	}
 	switch {
 	case evalMethods[name]:
-		if len(args) > 0 && (c.built(args[0], nil) || c.fromParams(args[0])) {
+		// class_eval and module_eval with an interpolated heredoc are how
+		// libraries define methods from their own configuration; only
+		// request input there is code injection.
+		metaprogramming := name == "class_eval" || name == "module_eval"
+		if len(args) > 0 && (!metaprogramming && c.built(args[0], nil) || c.fromParams(args[0])) {
 			c.report("ruby.eval-built", call)
 		}
 	case dispatchMethods[name]:
@@ -119,6 +148,12 @@ func (c *checker) checkCall(call *ts.Node) {
 	case sqlMethods[name]:
 		if connectionMethods[name] && receiver == nil {
 			return
+		}
+		// Redis and cache clients have exists?, select, and the like too.
+		if receiver != nil {
+			if r := strings.ToLower(c.tree.Text(receiver)); strings.Contains(r, "redis") || strings.Contains(r, "cache") {
+				return
+			}
 		}
 		if len(args) > 0 && c.built(args[0], sqlSafe) {
 			c.report("ruby.sql-string-built", call)
@@ -162,6 +197,11 @@ func isStatement(n *ts.Node) bool {
 // program directly and are not reported. An environment hash and keyword
 // options do not count as arguments.
 func (c *checker) checkCommand(call *ts.Node, args []*ts.Node) {
+	// Rake tasks and scripts in bin, exe, and script run on a developer's
+	// machine with the developer's own arguments.
+	if strings.HasSuffix(c.path, ".rake") || parsing.InDir(c.path, "tasks", "bin", "exe", "script") {
+		return
+	}
 	var command []*ts.Node
 	for _, arg := range args {
 		if arg.Kind() != "hash" && arg.Kind() != "pair" {

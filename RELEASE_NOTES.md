@@ -14,6 +14,7 @@ CLI rather than for people who work on it.
 - Fixed: csharp.blocking-on-task reports .Result, .Wait(), and GetAwaiter().GetResult() in async code and ASP.NET controllers, not in synchronous methods that wrap async ones, such as an override of EF's SaveChanges, nor under a #pragma that disables CA1849 or VSTHRD002 for it. Tests and benchmarks are skipped for it, async void, and insecure serializers.
 - Fixed: Folders named UnitTests, IntegrationTests, and FunctionalTests count as tests.
 - Fixed: PHP's security checks skip tests. php.include-variable-path and php.command-built report paths and commands built from request input, directly or through a variable, not from a program's own directories, configuration, or escaped arguments. php.sql-string-built reports an interpolated value where SQL expects one, not an expression that builds the statement, such as a column list or a CASE. Have I Been Pwned lookups and HTTP Digest authentication are not password storage.
+- Fixed: Ruby's security checks skip tests and specs, Redis and cache calls are not SQL, to_sql is escaped, class_eval and module_eval heredocs that define methods are reported only with request params, VERIFY_NONE behind a verification setting is the operator's choice, and commands in rake tasks and bin, exe, and script folders are developer tooling.
 
 ## v1.2.0 (2026-11-03)
 
