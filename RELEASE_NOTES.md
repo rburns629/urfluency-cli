@@ -9,7 +9,9 @@ sums up the release in one line. Each change is a bullet that starts with
 `New:`, `Improved:`, `Fixed:`, or `Security:`, written for people who use the
 CLI rather than for people who work on it.
 
-## v1.2.2 (unreleased)
+## v1.2.2 (2026-11-03)
+
+Fewer false security findings in Python, found by calibrating scores against reviewer ratings.
 
 - Fixed: Python's security checks skip tests, and py.sql-string-built reports a value spliced where SQL expects one, not table and column names, quoted identifiers, or placeholder lists that database backends format in. On Django, SQLAlchemy, Flask, and Requests their findings fell from 327 to 44.
 
