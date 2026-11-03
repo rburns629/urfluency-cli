@@ -284,8 +284,9 @@ report labels it so.
 
 When you upload, urFluency scores the same counts with its **official model**,
 and that is the score your profile and badges show. The official model is tuned
-over time and changes as it improves; when it does, your profile moves to it at
-your next upload, and says which model scored it. The local model is updated
+over time and changes as it improves; when it does, urFluency scores your stored
+counts again, without a new upload, and your profile says which model scored it.
+The local model is updated
 less often, so the two can differ by a few points, and sometimes by a level: for
 example, the official model rates a language from 200 lines of your code, and
 the local estimate from 300. Both models read the same counts, and neither sees
