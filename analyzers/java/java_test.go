@@ -57,22 +57,56 @@ func TestRules(t *testing.T) {
 		{
 			name: "unfiltered deserialization",
 			path: "src/main/java/Load.java",
-			src: class(`Object f(InputStream in) throws Exception {
-  return new ObjectInputStream(in).readObject();
+			src: class(`Object f(Socket socket) throws Exception {
+  return new ObjectInputStream(socket.getInputStream()).readObject();
 }
-Object g(InputStream in) throws Exception {
-  return new java.beans.XMLDecoder(in).readObject();
+Object g(HttpServletRequest req) throws Exception {
+  return new java.beans.XMLDecoder(req.getInputStream()).readObject();
 }
 Object h(InputStream in) throws Exception {
   ObjectInputStream s = new ObjectInputStream(in);
   s.setObjectInputFilter(FILTER);
   return s.readObject();
 }
-Object k(InputStream in) throws Exception {
-  return new ObjectInputStream(in) { protected Class<?> resolveClass(ObjectStreamClass d) { return null; } }.readObject();
+Object k(Socket in) throws Exception {
+  return new ObjectInputStream(in.getInputStream()) { protected Class<?> resolveClass(ObjectStreamClass d) { return null; } }.readObject();
+}
+// A stream handed in, as a serialization library's API takes, and bytes
+// the program wrote itself are not from the network.
+Object m(InputStream in) throws Exception {
+  return new ObjectInputStream(in).readObject();
+}
+Object n() throws Exception {
+  return new ObjectInputStream(new ByteArrayInputStream(this.saved)).readObject();
 }
 `),
 			want: []string{"java.unsafe-deserialization:3", "java.unsafe-deserialization:6"},
+		},
+		{
+			name: "trust-all checks that are reviewed or opted into",
+			path: "src/main/java/Cli.java",
+			src: class(`@SuppressFBWarnings(value = "WEAK_TRUST_MANAGER", justification = "User set parameter to skip verifier.")
+class NoCheck implements X509TrustManager {
+  public void checkServerTrusted(X509Certificate[] c, String a) {}
+}
+class NoCheckMethods implements X509TrustManager {
+  @Override
+  @SuppressFBWarnings(value = "WEAK_TRUST_MANAGER", justification = "User set parameter to skip verifier.")
+  public void checkServerTrusted(X509Certificate[] c, String a) {}
+}
+void connect(boolean noCertificateCheck, HttpsURLConnection conn) {
+  if (noCertificateCheck) {
+    conn.setHostnameVerifier((s, session) -> true);
+  }
+}
+`),
+			want: []string{},
+		},
+		{
+			name: "queries built in tests",
+			path: "src/test/java/QueryTest.java",
+			src:  class("void f(Statement s, int id) throws Exception { s.executeQuery(\"select * from t where id = \" + id); }\n"),
+			want: []string{},
 		},
 		{
 			name: "deserialization in tests is not reported",
