@@ -112,3 +112,37 @@ func TestSecretsRemovedLocallyDoNotCount(t *testing.T) {
 		t.Errorf("restored: %d findings, want 1", n)
 	}
 }
+
+// Uploads say under which rules findings were dismissed, so rules people
+// judge wrong can be tuned, and never which findings: no path, line, or
+// value.
+func TestUploadCountsDismissalsByRule(t *testing.T) {
+	t.Setenv("URFLUENCY_CONFIG_DIR", t.TempDir())
+	r := testutil.NewRepo(t)
+	r.Commit("me@example.com", "", map[string]string{"a.go": "package a\n\nconst apiKey = \"Zq8vLm2pR7xTb4\"\n"})
+	var out, errOut bytes.Buffer
+	if code := Run(context.Background(), []string{"dismiss", "sec.hardcoded-password", filepath.Join(r.Dir, "a.go") + ":3"}, &out, &errOut); code != 0 {
+		t.Fatalf("dismiss exit %d: %s", code, errOut.String())
+	}
+	out.Reset()
+	if code := Run(context.Background(), []string{"upload", "--dry-run", "--author", "me@example.com", "--since", "all", r.Dir}, &out, &errOut); code != 0 {
+		t.Fatalf("upload --dry-run exit %d: %s", code, errOut.String())
+	}
+	var p struct {
+		Facts struct {
+			Git struct {
+				Dismissed      int            `json:"dismissed"`
+				DismissedRules map[string]int `json:"dismissed_rules"`
+			} `json:"git"`
+		} `json:"facts"`
+	}
+	if err := json.Unmarshal(out.Bytes(), &p); err != nil {
+		t.Fatal(err)
+	}
+	if p.Facts.Git.Dismissed != 1 || p.Facts.Git.DismissedRules["sec.hardcoded-password"] != 1 || len(p.Facts.Git.DismissedRules) != 1 {
+		t.Errorf("facts.git = %+v, want one dismissal under sec.hardcoded-password", p.Facts.Git)
+	}
+	if s := out.String(); strings.Contains(s, "a.go") || strings.Contains(s, "Zq8v") {
+		t.Error("the payload names the dismissed finding's file or value")
+	}
+}

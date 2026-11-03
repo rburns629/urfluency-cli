@@ -53,6 +53,7 @@ type Scan struct {
 	SkippedSlow       int                 `json:"skipped_slow"`
 	SkippedUnanalyzed int                 `json:"skipped_unanalyzed"`
 	Dismissed         int                 `json:"dismissed"`
+	DismissedRules    map[string]int      `json:"dismissed_rules,omitempty"` // dismissals by rule id, never by finding
 	Declared          bool                `json:"declared"`
 	Tools             map[string]Tool     `json:"tools,omitempty"`
 	Commits           Commits             `json:"commits"`
@@ -228,7 +229,7 @@ func FromResult(r analysis.Result) Scan {
 		Findings: r.Findings, MarkedLines: r.MarkedLines, MarkedByTool: r.MarkedByTool,
 		Durability: Durability{r.Durability.AssistedAdded, r.Durability.AssistedFixed, r.Durability.OtherAdded, r.Durability.OtherFixed},
 		Written:    Written{Months: lines(r.Written.Months), Languages: lines(r.Written.Languages), Tools: r.Written.Tools},
-		Tests:      tests(r.Tests), SkippedSlow: r.SkippedSlow, SkippedUnanalyzed: r.SkippedUnanalyzed, Dismissed: r.Dismissed,
+		Tests:      tests(r.Tests), SkippedSlow: r.SkippedSlow, SkippedUnanalyzed: r.SkippedUnanalyzed, Dismissed: r.Dismissed, DismissedRules: r.DismissedByRule,
 		Declared: r.Declared, Commits: Commits{r.Git.Commits, r.Git.ShortSubject, r.Git.Descriptive, r.Git.Conventional, r.Git.WithBody},
 		FrameworkRepos: r.FrameworkRepos,
 	}
@@ -301,7 +302,7 @@ func (s Scan) Result() analysis.Result {
 		Durability: analysis.Durability{AssistedAdded: s.Durability.AssistedAdded, AssistedFixed: s.Durability.AssistedFixed,
 			OtherAdded: s.Durability.OtherAdded, OtherFixed: s.Durability.OtherFixed},
 		Written: analysis.Written{Months: writtenLines(s.Written.Months), Languages: writtenLines(s.Written.Languages), Tools: s.Written.Tools},
-		Tests:   habits(s.Tests), SkippedSlow: s.SkippedSlow, SkippedUnanalyzed: s.SkippedUnanalyzed, Dismissed: s.Dismissed,
+		Tests:   habits(s.Tests), SkippedSlow: s.SkippedSlow, SkippedUnanalyzed: s.SkippedUnanalyzed, Dismissed: s.Dismissed, DismissedByRule: s.DismissedRules,
 		Declared: s.Declared, Git: analysis.GitHabits{Commits: s.Commits.Commits, ShortSubject: s.Commits.ShortSubject,
 			Descriptive: s.Commits.Descriptive, Conventional: s.Commits.Conventional, WithBody: s.Commits.WithBody},
 		FrameworkRepos: s.FrameworkRepos,
