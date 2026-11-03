@@ -408,6 +408,9 @@ func TestIncompleteScans(t *testing.T) {
 		if r.Verdict != c.want {
 			t.Errorf("%s: %s, want %s (files %d, skipped %d, truncated %v): %s", name, r.Verdict, c.want, r.Files, r.Skipped, r.Truncated, r.Caveat)
 		}
+		if name == "a large fixture beside a large script" && (len(r.Unread) != 1 || r.Unread[0] != "lib/big.js") {
+			t.Errorf("%s: unread %v, want the script named and the fixture left out", name, r.Unread)
+		}
 	}
 }
 
