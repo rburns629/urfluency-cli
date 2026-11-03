@@ -4,6 +4,7 @@ import (
 	"go/ast"
 	"go/token"
 
+	"github.com/rburns629/urfluency-cli/analysis"
 	"github.com/rburns629/urfluency-cli/parsing"
 )
 
@@ -15,6 +16,7 @@ func (c *checker) checkComplexity(fn *ast.FuncDecl) {
 	}
 	cc := newCognitive(fn)
 	cc.block(fn.Body.List, 0)
+	c.findings = append(c.findings, analysis.EvidenceOf(c.path, c.fset.Position(fn.Pos()).Line, cc.total)...)
 	if cc.total > parsing.CognitiveThreshold {
 		c.report("clean.cognitive-complexity", fn.Pos())
 	}

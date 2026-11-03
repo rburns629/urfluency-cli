@@ -1,16 +1,7 @@
+// Command urfluency is the community build of the CLI: the analyzers and
+// rules in this repository.
 package main
 
-import (
-	"context"
-	"os"
-	"os/signal"
+import "github.com/rburns629/urfluency-cli/launch"
 
-	"github.com/rburns629/urfluency-cli/internal/cli"
-)
-
-func main() {
-	ctx, stop := signal.NotifyContext(context.Background(), os.Interrupt)
-	code := cli.Run(ctx, os.Args[1:], os.Stdout, os.Stderr)
-	stop()
-	os.Exit(code)
-}
+func main() { launch.Main() }

@@ -89,11 +89,14 @@ type Finding struct {
 
 // Report is the result of a scan.
 type Report struct {
-	Version   string    `json:"version"`
-	Verdict   string    `json:"verdict"`
-	Score     int       `json:"score"` // 0–100; 100 means nothing was found
-	Files     int       `json:"files_checked"`
-	Skipped   int       `json:"files_skipped"`
+	Version string `json:"version"`
+	Verdict string `json:"verdict"`
+	Score   int    `json:"score"` // 0–100; 100 means nothing was found
+	Files   int    `json:"files_checked"`
+	Skipped int    `json:"files_skipped"`
+	// Unread names up to maxUnread of the skipped files outside tests, which
+	// keep a scan from saying nothing was found, so their owner can act.
+	Unread    []string  `json:"unread,omitempty"`
 	Truncated bool      `json:"truncated,omitempty"` // the file limit was reached
 	Findings  []Finding `json:"findings"`
 	Counts    []Count   `json:"by_category"`
@@ -114,6 +117,9 @@ type Limits struct {
 }
 
 // DefaultLimits suit a typical repository.
+// maxUnread bounds the unread files a report names.
+const maxUnread = 20
+
 var DefaultLimits = Limits{MaxFiles: 20000, MaxFileSize: 2 << 20}
 
 // skipDirs are never read: version control metadata and installed
@@ -237,6 +243,9 @@ func Scan(ctx context.Context, dir string, limits Limits) (Report, error) {
 			r.Skipped++
 			if where, ok := buildOnly(e.rel); !ok || where != "tests" {
 				unread++
+				if len(r.Unread) < maxUnread {
+					r.Unread = append(r.Unread, e.rel)
+				}
 			}
 			continue
 		}

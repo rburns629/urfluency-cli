@@ -138,6 +138,9 @@ func (c *checker) checkComplexity() {
 		return true
 	})
 	for _, fn := range parsing.Cognitive(c.tree, complexity) {
+		if !within(fn.Line, tests) {
+			c.findings = append(c.findings, analysis.EvidenceOf(c.path, fn.Line, fn.Complexity)...)
+		}
 		if fn.Complexity > parsing.CognitiveThreshold && !within(fn.Line, tests) {
 			c.findings = append(c.findings, analysis.Finding{Rule: "clean.cognitive-complexity", Path: c.path, Line: fn.Line})
 		}

@@ -2,6 +2,7 @@ package dart
 
 import (
 	"context"
+	"strings"
 	"testing"
 
 	"github.com/rburns629/urfluency-cli/analysis"
@@ -50,7 +51,7 @@ Stream<int> ticks() async* {
 		t.Fatal(err)
 	}
 	for _, f := range fs {
-		if f.Positive {
+		if f.Positive && !strings.HasPrefix(f.Rule, "evidence.") {
 			got[f.Rule]++
 		}
 	}

@@ -9,6 +9,14 @@ sums up the release in one line. Each change is a bullet that starts with
 `New:`, `Improved:`, `Fixed:`, or `Security:`, written for people who use the
 CLI rather than for people who work on it.
 
+## v1.1.0 (2026-11-03)
+
+Uploads tell urfluency.com how much logic your code holds, and the official build gains urFluency's private engine.
+
+- New: The official build, the one Homebrew installs, runs urFluency's private engine beside the open rules. It reads files only, like the rest, and your code still never leaves your machine. `urfluency version` names the engine a build runs, and uploads report it.
+- New: Each language's facts count its functions and their complexity on your own lines, so the official score can judge a small project by the logic it holds rather than its line count. Nothing about your code beyond those counts is sent.
+- Improved: `urfluency check` names the files it could not read, outside tests, since any of them keeps it from saying nothing was found; `--json` lists them as `unread`.
+
 ## v1.0.3 (2026-11-02)
 
 Fewer false alarms from `urfluency check`, tested against 44 well-known open-source projects.

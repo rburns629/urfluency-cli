@@ -74,7 +74,7 @@ func Run(ctx context.Context, args []string, stdout, stderr io.Writer) int {
 	case "doctor":
 		err = doctor(ctx, stdout)
 	case "version":
-		_, err = fmt.Fprintln(stdout, "urfluency", Version)
+		_, err = fmt.Fprintf(stdout, "urfluency %s (%s engine)\n", Version, analysis.Engine())
 	case "help", "-h", "--help":
 		err = help(args[1:], stdout)
 	default:

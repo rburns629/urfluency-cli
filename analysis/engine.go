@@ -116,6 +116,9 @@ type LanguageResult struct {
 	TestLines        int            // owned lines in test files, included in OwnedLines
 	// Idioms counts positive findings on owned lines, per rule.
 	Idioms map[string]IdiomUse
+	// Evidence counts owned functions and their complexity; nil when the
+	// analyzer measured no function on owned lines.
+	Evidence *Evidence
 }
 
 // IdiomUse is how often, and in how many files, owned code used an idiom.
@@ -387,7 +390,7 @@ func analyzeFiles(ctx context.Context, result *Result, files []ownedFile, tools 
 			continue
 		}
 		opts.progress("analyzing "+a.Language(), 0, 0)
-		lr, counts, err := run(ctx, a.Language(), group, a.Analyze, opts)
+		lr, counts, err := run(ctx, a.Language(), group, withExtensions(a), opts)
 		result.Dismissed += counts.dismissed
 		result.SkippedUnanalyzed += counts.unanalyzed
 		if err != nil {
@@ -488,6 +491,17 @@ func run(ctx context.Context, name string, group []ownedFile,
 			continue
 		}
 		if opts.present != nil && strings.HasPrefix(fd.Rule, "sec.") && !opts.present(fd.Path, lineOf(fd.Path, fd.Line)) {
+			continue
+		}
+		if fd.Positive && isEvidence(fd.Rule) {
+			if lr.Evidence == nil {
+				lr.Evidence = &Evidence{}
+			}
+			if fd.Rule == EvidenceFunction {
+				lr.Evidence.Functions++
+			} else {
+				lr.Evidence.Branches++
+			}
 			continue
 		}
 		if fd.Positive {

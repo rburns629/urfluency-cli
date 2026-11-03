@@ -107,5 +107,11 @@ func writeSafety(w io.Writer, target string, r safety.Report) {
 		}
 		fmt.Fprintf(w, "    %s\n", f.Why)
 	}
+	if len(r.Unread) > 0 {
+		fmt.Fprintln(w, "\nNOT READ (too large or unreadable; a file the check cannot read keeps it from saying nothing was found)")
+		for _, p := range r.Unread {
+			fmt.Fprintf(w, "  %s\n", report.TermSafe(p))
+		}
+	}
 	fmt.Fprintf(w, "\n%s Secrets are reported by type and location, never shown.\n", r.Caveat)
 }

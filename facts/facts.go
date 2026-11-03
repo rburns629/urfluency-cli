@@ -25,6 +25,9 @@ const Format = "1"
 // Facts are one upload's counts.
 type Facts struct {
 	Format string `json:"format"`
+	// Engine names the engine that found the findings (analysis.Engine):
+	// "community" for a build of the public source alone.
+	Engine string `json:"engine,omitempty"`
 	// Git is the scan of the Git repositories, Folders that of the project
 	// folders without Git; either can be absent.
 	Git     *Scan `json:"git,omitempty"`
@@ -71,6 +74,16 @@ type Language struct {
 	AssistedByRule   map[string]int   `json:"assisted_by_rule,omitempty"`
 	TestLines        int              `json:"test_lines"`
 	Idioms           map[string]Idiom `json:"idioms,omitempty"`
+	// Evidence is the logic the owned code holds; absent from CLIs before
+	// 1.1.0 and for code with no function the analyzer measured.
+	Evidence *Evidence `json:"evidence,omitempty"`
+}
+
+// Evidence is analysis.Evidence: owned functions and their cognitive
+// complexity.
+type Evidence struct {
+	Functions int `json:"functions"`
+	Branches  int `json:"branches"`
 }
 
 // Idiom is how often, and in how many files, owned code used an idiom.
@@ -190,7 +203,7 @@ type Tally struct {
 // the folders without Git (either may be empty), and the prompting grades,
 // when sessions were read.
 func New(git, folders analysis.Result, grades *sessions.Grades) Facts {
-	f := Facts{Format: Format}
+	f := Facts{Format: Format, Engine: analysis.Engine()}
 	if git.Repos > 0 || len(git.Languages) > 0 {
 		s := FromResult(git)
 		f.Git = &s
@@ -239,6 +252,10 @@ func FromResult(r analysis.Result) Scan {
 			for k, u := range lr.Idioms {
 				l.Idioms[k] = Idiom(u)
 			}
+		}
+		if lr.Evidence != nil {
+			e := Evidence(*lr.Evidence)
+			l.Evidence = &e
 		}
 		s.Languages = append(s.Languages, l)
 	}
@@ -313,6 +330,10 @@ func (s Scan) Result() analysis.Result {
 			for k, u := range l.Idioms {
 				lr.Idioms[k] = analysis.IdiomUse(u)
 			}
+		}
+		if l.Evidence != nil {
+			e := analysis.Evidence(*l.Evidence)
+			lr.Evidence = &e
 		}
 		r.Languages = append(r.Languages, lr)
 	}

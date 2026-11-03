@@ -165,3 +165,35 @@ func TestFactsLeaveOutIdentifyingFields(t *testing.T) {
 		t.Errorf("facts lack per-rule findings or projects: %s", s)
 	}
 }
+
+// Evidence, the owned functions and their complexity, is measured on a scan
+// and survives the facts, so the official model can read it.
+func TestFactsCarryEvidence(t *testing.T) {
+	res := scan(t)
+	measured := 0
+	for _, l := range res.Languages {
+		if l.Evidence != nil {
+			measured++
+			if l.Evidence.Functions == 0 {
+				t.Errorf("%s: evidence %+v with no function", l.Language, l.Evidence)
+			}
+		}
+	}
+	if measured == 0 {
+		t.Fatal("no language of the fixture has evidence")
+	}
+	data, err := json.Marshal(facts.New(res, analysis.Result{}, nil))
+	if err != nil {
+		t.Fatal(err)
+	}
+	var back facts.Facts
+	if err := json.Unmarshal(data, &back); err != nil {
+		t.Fatal(err)
+	}
+	got := back.Git.Result()
+	for i, l := range res.Languages {
+		if (l.Evidence == nil) != (got.Languages[i].Evidence == nil) || (l.Evidence != nil && *l.Evidence != *got.Languages[i].Evidence) {
+			t.Errorf("%s: evidence %+v came back as %+v", l.Language, l.Evidence, got.Languages[i].Evidence)
+		}
+	}
+}

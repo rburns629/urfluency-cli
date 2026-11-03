@@ -106,6 +106,13 @@ func Merge(labels []string, parts []Result) Result {
 			for rule, n := range lr.AssistedByRule {
 				m.AssistedByRule[rule] += n
 			}
+			if lr.Evidence != nil {
+				if m.Evidence == nil {
+					m.Evidence = &Evidence{}
+				}
+				m.Evidence.Functions += lr.Evidence.Functions
+				m.Evidence.Branches += lr.Evidence.Branches
+			}
 			for rule, u := range lr.Idioms {
 				sum := m.Idioms[rule]
 				sum.Uses += u.Uses

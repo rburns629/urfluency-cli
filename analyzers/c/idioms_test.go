@@ -3,6 +3,7 @@ package clang
 import (
 	"context"
 	"reflect"
+	"strings"
 	"testing"
 
 	"github.com/rburns629/urfluency-cli/analysis"
@@ -17,7 +18,7 @@ func idioms(t *testing.T, path, src string) map[string]int {
 	}
 	got := map[string]int{}
 	for _, f := range findings {
-		if f.Positive {
+		if f.Positive && !strings.HasPrefix(f.Rule, "evidence.") {
 			got[f.Rule]++
 		}
 	}
