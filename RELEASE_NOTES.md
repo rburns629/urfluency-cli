@@ -13,6 +13,12 @@ CLI rather than for people who work on it.
 
 - Improved: Uploads say under which rules you dismissed findings, as a count per rule id, so urFluency can see which rules people judge wrong and tune them. They still never say which findings: no file, line, or code. `upload --dry-run` shows exactly what is sent.
 
+## v1.2.2 (2026-11-03)
+
+Fewer false security findings in Python, found by calibrating scores against reviewer ratings.
+
+- Fixed: Python's security checks skip tests, and py.sql-string-built reports a value spliced where SQL expects one, not table and column names, quoted identifiers, or placeholder lists that database backends format in. On Django, SQLAlchemy, Flask, and Requests their findings fell from 327 to 44.
+
 ## v1.2.1 (2026-11-03)
 
 Fewer false findings across seven languages, from benchmarking each one against well-known projects.
