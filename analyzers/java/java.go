@@ -115,15 +115,15 @@ func (c *checker) visit(n *ts.Node) bool {
 	case "object_creation_expression":
 		c.checkCreation(n)
 	case "method_declaration":
-		if !c.isTest {
+		if !c.isTest && !c.trustAllAllowed(n) {
 			c.checkTrustAll(n)
 		}
 	case "lambda_expression":
-		if !c.isTest && c.permissiveVerifierLambda(n) {
+		if !c.isTest && c.permissiveVerifierLambda(n) && !c.trustAllAllowed(n) {
 			c.report("java.trust-all-certificates", n)
 		}
 	case "field_access":
-		if !c.isTest && c.text(n.ChildByFieldName("object")) == "NoopHostnameVerifier" {
+		if !c.isTest && c.text(n.ChildByFieldName("object")) == "NoopHostnameVerifier" && !c.trustAllAllowed(n) {
 			c.report("java.trust-all-certificates", n)
 		}
 	case "catch_clause":
@@ -145,7 +145,7 @@ func (c *checker) checkInvocation(n *ts.Node) {
 	name := c.text(n.ChildByFieldName("name"))
 	args := argumentNodes(n)
 	switch {
-	case sqlMethods[name] && len(args) > 0 && c.sqlConcatenation(args[0]):
+	case sqlMethods[name] && len(args) > 0 && !c.isTest && c.sqlConcatenation(args[0]):
 		c.report("java.sql-string-built", n)
 	case name == "exec" && strings.HasSuffix(c.text(n.ChildByFieldName("object")), "getRuntime()") &&
 		len(args) > 0 && c.dynamicConcatenation(args[0]):
@@ -162,11 +162,11 @@ func (c *checker) checkCreation(n *ts.Node) {
 	case "ProcessBuilder":
 		c.checkProcessBuilder(n)
 	case "ObjectInputStream", "XMLDecoder":
-		if !c.isTest && !hasChildKind(n, "class_body") && !c.filtered(n) {
+		if !c.isTest && !hasChildKind(n, "class_body") && c.fromConnection(n) && !c.filtered(n) {
 			c.report("java.unsafe-deserialization", n)
 		}
 	case "NoopHostnameVerifier":
-		if !c.isTest {
+		if !c.isTest && !c.trustAllAllowed(n) {
 			c.report("java.trust-all-certificates", n)
 		}
 	}

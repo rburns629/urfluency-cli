@@ -390,7 +390,11 @@ func analyzeFiles(ctx context.Context, result *Result, files []ownedFile, tools 
 			continue
 		}
 		opts.progress("analyzing "+a.Language(), 0, 0)
-		lr, counts, err := run(ctx, a.Language(), group, withExtensions(a), opts)
+		inputs := make([]File, len(group))
+		for i, f := range group {
+			inputs[i] = f.file
+		}
+		lr, counts, err := run(ctx, a.Language(), group, withExtensions(ctx, a, inputs), opts)
 		result.Dismissed += counts.dismissed
 		result.SkippedUnanalyzed += counts.unanalyzed
 		if err != nil {

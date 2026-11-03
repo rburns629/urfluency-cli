@@ -155,6 +155,45 @@ func (c *checker) filtered(n *ts.Node) bool {
 	return false
 }
 
+// fromConnection reports whether a deserializer reads from a connection or
+// request, such as new ObjectInputStream(socket.getInputStream()): bytes
+// anyone on the network can send. A stream passed in, as a serialization
+// library's API takes one, or bytes the program wrote itself, are left alone.
+func (c *checker) fromConnection(n *ts.Node) bool {
+	args := argumentNodes(n)
+	return len(args) > 0 && strings.Contains(c.text(args[0]), "getInputStream()")
+}
+
+// insecureFlags name the options a program offers to skip certificate
+// checks on purpose, such as Jenkins's -noCertificateCheck.
+var insecureFlags = []string{"insecure", "nocertificatecheck", "nocertcheck", "skipverif", "skipssl", "skiptls",
+	"trustall", "disablessl", "disabletls", "noverify", "ignoressl", "ignorecert"}
+
+// trustAllAllowed reports a trust-all certificate or hostname check that is
+// a reviewed decision: inside a declaration marked @SuppressFBWarnings or
+// @SuppressWarnings, or under an if on an option to skip verification,
+// which the user turns on.
+func (c *checker) trustAllAllowed(n *ts.Node) bool {
+	for p := n; p != nil; p = c.tree.Parent(p) { // n itself: the annotation may be on the flagged method
+		switch p.Kind() {
+		case "if_statement":
+			cond := strings.ToLower(c.text(p.ChildByFieldName("condition")))
+			for _, f := range insecureFlags {
+				if strings.Contains(cond, f) {
+					return true
+				}
+			}
+		case "method_declaration", "constructor_declaration", "class_declaration", "field_declaration", "local_variable_declaration":
+			for _, ch := range parsing.NamedChildren(p) {
+				if ch.Kind() == "modifiers" && (strings.Contains(c.text(ch), "@SuppressFBWarnings") || strings.Contains(c.text(ch), "@SuppressWarnings")) {
+					return true
+				}
+			}
+		}
+	}
+	return false
+}
+
 // checkTrustAll flags trust managers whose checkServerTrusted accepts every
 // certificate, and hostname verifiers whose verify always returns true.
 func (c *checker) checkTrustAll(n *ts.Node) {
