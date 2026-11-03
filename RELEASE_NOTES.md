@@ -9,7 +9,9 @@ sums up the release in one line. Each change is a bullet that starts with
 `New:`, `Improved:`, `Fixed:`, or `Security:`, written for people who use the
 CLI rather than for people who work on it.
 
-## v1.2.1 (unreleased)
+## v1.2.1 (2026-11-03)
+
+Fewer false findings across seven languages, from benchmarking each one against well-known projects.
 
 - Fixed: csharp.blocking-on-task reports .Result, .Wait(), and GetAwaiter().GetResult() in async code and ASP.NET controllers, not in synchronous methods that wrap async ones, such as an override of EF's SaveChanges, nor under a #pragma that disables CA1849 or VSTHRD002 for it. Tests and benchmarks are skipped for it, async void, and insecure serializers.
 - Fixed: Folders named UnitTests, IntegrationTests, and FunctionalTests count as tests.
