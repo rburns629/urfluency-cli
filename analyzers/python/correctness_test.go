@@ -180,12 +180,85 @@ if __name__ == "__main__":
 		{"a script in a tests folder that only asserts", "tests/test_smoke.py", `if __name__ == "__main__":
     assert 1 + 1 == 2
 `, []string{}},
+		{"KeyMapper's container mistakes", "lib/km.py", `class KeyMapper(dict):
+    def __init__(self, *args, **kwargs):
+        super().__init__(*args, **kwargs)
+        if 'delimiter' in kwargs:
+            self.delimiter = kwargs['delimiter']
+        for arg in args:
+            self.__dict__.update(arg)
+
+    def __setattr__(self, key, value):
+        self.__setitem__(key, value)
+`, []string{"py.container-duplicated-state:7", "py.container-options-leak:3", "py.setattr-into-items:9"}},
+		{"containers that keep options and data apart", "lib/c.py", `class Config(dict):
+    def __init__(self, *args, **kwargs):
+        self.strict = kwargs.pop("strict", False)
+        super().__init__(*args, **kwargs)
+
+class Plain(dict):
+    def __init__(self, *args, **kwargs):
+        super().__init__(*args, **kwargs)
+
+class AttrDict(dict):
+    def __init__(self, *args, **kwargs):
+        super().__init__(*args, **kwargs)
+        self.__dict__ = self
+
+class Record(dict):
+    def __setattr__(self, key, value):
+        self[key] = value
+
+class Guarded(dict):
+    def __init__(self) -> None:
+        self.ready = True
+
+    def __setattr__(self, key, value):
+        if key == "ready":
+            object.__setattr__(self, key, value)
+        else:
+            self[key] = value
+
+class NotAContainer:
+    def __init__(self, **kwargs):
+        super().__init__(**kwargs)
+        self.name = kwargs["name"]
+`, []string{}},
+		{"loop else clauses", "lib/l.py", `def f(items: list) -> int:
+    for x in items:
+        print(x)
+    else:
+        print("done")
+    while items:
+        items.pop()
+    else:
+        return 0
+    return 1
+`, []string{"py.loop-else-without-break:4", "py.loop-else-without-break:8"}},
+		{"loop else clauses with a break of their own", "lib/l.py", `def find(items: list, want: int) -> int:
+    for x in items:
+        if x == want:
+            break
+    else:
+        return -1
+    for row in items:
+        for cell in row:
+            if cell:
+                break
+        else:
+            continue
+        break
+    else:
+        return 0
+    return x
+`, []string{}},
 		{"a helper named like a test", "tests/test_utils.py", `def make_user() -> dict:
     return {"name": "a"}
 `, []string{}},
 	}
 	only := map[string]bool{"py.dataclass-without-fields": true, "py.getattr-without-attributeerror": true, "py.reraise-only-handler": true,
-		"py.mutable-class-attribute": true, "py.test-file-without-tests": true}
+		"py.mutable-class-attribute": true, "py.container-options-leak": true, "py.setattr-into-items": true,
+		"py.container-duplicated-state": true, "py.loop-else-without-break": true, "py.test-file-without-tests": true}
 	for _, tc := range tests {
 		got := []string{}
 		for _, f := range findings(t, tc.path, tc.src) {

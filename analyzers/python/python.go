@@ -94,6 +94,8 @@ func (c *checker) visit(n *ts.Node) bool {
 		c.checkReraise(n)
 	case "class_definition":
 		c.checkClass(n)
+	case "for_statement", "while_statement":
+		c.checkLoopElse(n)
 	case "comparison_operator":
 		if parsing.HasToken(n, "is", "is not") {
 			for _, operand := range parsing.NamedChildren(n) {

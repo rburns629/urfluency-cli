@@ -121,6 +121,8 @@ func (c *checker) checkClass(cls *ts.Node) {
 		}
 	}
 	c.checkMutableClassAttributes(cls)
+	c.checkContainerClass(cls)
+	c.checkSetattr(cls)
 }
 
 // checkGetattr flags a __getattr__ method with no way to raise
@@ -387,5 +389,226 @@ func (c *checker) checkTestFile(root *ts.Node) {
 	})
 	if !asserts {
 		c.report("py.test-file-without-tests", root)
+	}
+}
+
+// containerBases are the classes whose subclasses hold their data as items.
+var containerBases = map[string]bool{
+	"dict": true, "list": true, "set": true, "OrderedDict": true, "defaultdict": true, "UserDict": true, "UserList": true, "Counter": true,
+}
+
+// extendsContainer reports whether a class extends a built-in container,
+// directly or as collections.X or dict[K, V].
+func (c *checker) extendsContainer(cls *ts.Node) bool {
+	bases := cls.ChildByFieldName("superclasses")
+	if bases == nil {
+		return false
+	}
+	for _, b := range parsing.NamedChildren(bases) {
+		name, _, _ := strings.Cut(c.tree.Text(b), "[")
+		if i := strings.LastIndex(name, "."); i >= 0 {
+			name = name[i+1:]
+		}
+		if containerBases[strings.TrimSpace(name)] {
+			return true
+		}
+	}
+	return false
+}
+
+// method returns a class's method by name.
+func method(t *parsing.Tree, cls *ts.Node, name string) *ts.Node {
+	for _, m := range classMethods(cls) {
+		if n := m.ChildByFieldName("name"); n != nil && t.Text(n) == name {
+			return m
+		}
+	}
+	return nil
+}
+
+// checkContainerClass applies the rules for classes that extend a
+// container: options passed on as items, and entries copied into __dict__.
+func (c *checker) checkContainerClass(cls *ts.Node) {
+	if c.isTest || !c.extendsContainer(cls) {
+		return
+	}
+	if init := method(c.tree, cls, "__init__"); init != nil {
+		c.checkOptionsLeak(init)
+	}
+	// Entries are copied when one method stores them as items, through the
+	// container's own __init__ or __setitem__, and also writes __dict__.
+	// Restoring other attributes, as __setstate__ does after unpickling, is
+	// not a copy.
+	for _, m := range classMethods(cls) {
+		var hit *ts.Node
+		stores := false
+		parsing.Walk(m, func(n *ts.Node) bool {
+			switch n.Kind() {
+			case "call":
+				fn := n.ChildByFieldName("function")
+				if fn == nil {
+					return true
+				}
+				callee := c.tree.Text(fn)
+				if strings.HasSuffix(callee, ".__init__") || strings.HasSuffix(callee, ".__setitem__") || strings.HasSuffix(callee, ".update") && callee != "self.__dict__.update" {
+					stores = stores || strings.HasPrefix(callee, "super()") || strings.Contains(callee, "dict.") || strings.Contains(callee, "list.")
+				}
+				if callee == "self.__dict__.update" && hit == nil {
+					hit = n
+				}
+			case "assignment", "augmented_assignment":
+				if left := n.ChildByFieldName("left"); left != nil && left.Kind() == "subscript" {
+					if v := left.ChildByFieldName("value"); v != nil && c.tree.Text(v) == "self.__dict__" && hit == nil {
+						hit = n
+					}
+				}
+			}
+			return true
+		})
+		if hit != nil && stores {
+			c.report("py.container-duplicated-state", hit)
+			return
+		}
+	}
+}
+
+// checkOptionsLeak flags an __init__ that passes **kwargs to the container
+// it extends and also reads options from kwargs, unless it pops them first.
+func (c *checker) checkOptionsLeak(init *ts.Node) {
+	params := init.ChildByFieldName("parameters")
+	body := init.ChildByFieldName("body")
+	if params == nil || body == nil {
+		return
+	}
+	kw := ""
+	for _, p := range parsing.NamedChildren(params) {
+		if p.Kind() == "dictionary_splat_pattern" && p.NamedChildCount() > 0 {
+			kw = c.tree.Text(p.NamedChild(0))
+		}
+	}
+	if kw == "" {
+		return
+	}
+	var forward *ts.Node
+	popped, reads := false, false
+	parsing.Walk(body, func(n *ts.Node) bool {
+		switch n.Kind() {
+		case "call":
+			fn, args := n.ChildByFieldName("function"), n.ChildByFieldName("arguments")
+			if fn == nil {
+				return true
+			}
+			callee := c.tree.Text(fn)
+			if strings.HasSuffix(callee, ".__init__") && args != nil && forward == nil {
+				for _, a := range parsing.NamedChildren(args) {
+					if a.Kind() == "dictionary_splat" && c.tree.Text(a) == "**"+kw {
+						forward = n
+					}
+				}
+			}
+			if callee == kw+".pop" && forward == nil {
+				popped = true
+			}
+			if callee == kw+".get" {
+				reads = true
+			}
+		case "subscript":
+			if v := n.ChildByFieldName("value"); v != nil && c.tree.Text(v) == kw {
+				reads = true
+			}
+		case "comparison_operator":
+			if parsing.HasToken(n, "in") {
+				if ops := parsing.NamedChildren(n); len(ops) == 2 && c.tree.Text(ops[1]) == kw {
+					reads = true
+				}
+			}
+		}
+		return true
+	})
+	if forward != nil && reads && !popped {
+		c.report("py.container-options-leak", forward)
+	}
+}
+
+// checkSetattr flags a __setattr__ that stores every name as an item, with
+// no way through to the object's own attributes, in a class that sets
+// attributes of its own: they become items. An attribute dict that sets
+// none of its own is left alone.
+func (c *checker) checkSetattr(cls *ts.Node) {
+	if c.isTest {
+		return
+	}
+	setattr := method(c.tree, cls, "__setattr__")
+	if setattr == nil {
+		return
+	}
+	body := setattr.ChildByFieldName("body")
+	if body == nil {
+		return
+	}
+	text := c.tree.Text(body)
+	if !strings.Contains(text, "__setitem__(") && !strings.Contains(text, "self[") {
+		return
+	}
+	for _, through := range []string{"object.__setattr__", "super(", "__dict__", ".__setattr__("} {
+		if strings.Contains(text, through) {
+			return
+		}
+	}
+	sets := false
+	for _, m := range classMethods(cls) {
+		if m.Id() == setattr.Id() {
+			continue
+		}
+		parsing.Walk(m, func(n *ts.Node) bool {
+			if n.Kind() == "assignment" {
+				if left := n.ChildByFieldName("left"); left != nil && left.Kind() == "attribute" {
+					if obj := left.ChildByFieldName("object"); obj != nil && c.tree.Text(obj) == "self" {
+						sets = true
+					}
+				}
+			}
+			return !sets
+		})
+	}
+	if sets {
+		c.report("py.setattr-into-items", setattr)
+	}
+}
+
+// checkLoopElse flags a for or while loop with an else clause and no break
+// of its own: the else always runs.
+func (c *checker) checkLoopElse(loop *ts.Node) {
+	if c.isTest {
+		return
+	}
+	alt := loop.ChildByFieldName("alternative")
+	body := loop.ChildByFieldName("body")
+	if alt == nil || body == nil {
+		return
+	}
+	breaks := false
+	var visit func(n *ts.Node)
+	visit = func(n *ts.Node) {
+		for _, ch := range parsing.NamedChildren(n) {
+			switch ch.Kind() {
+			case "break_statement":
+				breaks = true
+			case "for_statement", "while_statement", "function_definition", "class_definition", "lambda":
+				// A break there belongs to that loop; a nested loop's else
+				// is checked on its own.
+				if ch.Kind() == "for_statement" || ch.Kind() == "while_statement" {
+					if a := ch.ChildByFieldName("alternative"); a != nil {
+						visit(a)
+					}
+				}
+			default:
+				visit(ch)
+			}
+		}
+	}
+	visit(body)
+	if !breaks {
+		c.report("py.loop-else-without-break", alt)
 	}
 }
