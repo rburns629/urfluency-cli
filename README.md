@@ -328,7 +328,8 @@ A secret removed from your files no longer counts, even if the change is not
 committed; it can still be in the repository's history, so rotate any that
 were live. Only the rule and a hash of the line are saved, on this machine. A dismissal
 follows the line if the file moves and lapses if the line changes. Reports and
-uploads say how many findings you dismissed, never which.
+uploads say how many findings you dismissed, and under which rule ids, never which findings,
+so urFluency can see which rules people judge wrong and tune them.
 
 ## License
 

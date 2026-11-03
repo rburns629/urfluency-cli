@@ -9,6 +9,10 @@ sums up the release in one line. Each change is a bullet that starts with
 `New:`, `Improved:`, `Fixed:`, or `Security:`, written for people who use the
 CLI rather than for people who work on it.
 
+## v1.3.0 (unreleased)
+
+- Improved: Uploads say under which rules you dismissed findings, as a count per rule id, so urFluency can see which rules people judge wrong and tune them. They still never say which findings: no file, line, or code. `upload --dry-run` shows exactly what is sent.
+
 ## v1.2.2 (2026-11-03)
 
 Fewer false security findings in Python, found by calibrating scores against reviewer ratings.

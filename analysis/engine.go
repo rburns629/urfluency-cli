@@ -153,8 +153,11 @@ type Result struct {
 	// SkippedUnanalyzed counts files skipped because an analyzer panicked on
 	// them or ran longer than AnalysisBudget.
 	SkippedUnanalyzed int
-	// Dismissed counts findings left out because the user dismissed them.
-	Dismissed int
+	// Dismissed counts findings left out because the user dismissed them, and
+	// DismissedByRule the same by rule id: which rules users judge wrong,
+	// never which findings.
+	Dismissed       int
+	DismissedByRule map[string]int
 	// Declared is true for folders without Git history, where every line counts
 	// as the user's because nothing records who wrote it.
 	Declared bool
@@ -395,7 +398,7 @@ func analyzeFiles(ctx context.Context, result *Result, files []ownedFile, tools 
 			inputs[i] = f.file
 		}
 		lr, counts, err := run(ctx, a.Language(), group, withExtensions(ctx, a, inputs), opts)
-		result.Dismissed += counts.dismissed
+		result.addDismissed(counts)
 		result.SkippedUnanalyzed += counts.unanalyzed
 		if err != nil {
 			return err
@@ -416,7 +419,7 @@ func analyzeFiles(ctx context.Context, result *Result, files []ownedFile, tools 
 			continue
 		}
 		lr, counts, err := run(ctx, s.Name(), group, s.Analyze, opts)
-		result.Dismissed += counts.dismissed
+		result.addDismissed(counts)
 		result.SkippedUnanalyzed += counts.unanalyzed
 		if err != nil {
 			return err
@@ -446,8 +449,20 @@ func analyzeFiles(ctx context.Context, result *Result, files []ownedFile, tools 
 
 // runCounts are the files and findings run leaves out.
 type runCounts struct {
-	dismissed  int // findings the user dismissed
-	unanalyzed int // files an analyzer panicked on or overran AnalysisBudget
+	dismissed       int            // findings the user dismissed
+	dismissedByRule map[string]int // the same, by rule
+	unanalyzed      int            // files an analyzer panicked on or overran AnalysisBudget
+}
+
+// addDismissed adds a run's dismissals to the result.
+func (r *Result) addDismissed(c runCounts) {
+	r.Dismissed += c.dismissed
+	for rule, n := range c.dismissedByRule {
+		if r.DismissedByRule == nil {
+			r.DismissedByRule = map[string]int{}
+		}
+		r.DismissedByRule[rule] += n
+	}
 }
 
 // run analyzes a group of files and keeps findings on owned lines, except ones
@@ -484,7 +499,7 @@ func run(ctx context.Context, name string, group []ownedFile,
 		}
 		return lines[n-1]
 	}
-	skipped := 0
+	skipped, skippedByRule := 0, map[string]int{}
 	idiomFiles := map[string]map[string]bool{}
 	for _, fd := range findings {
 		if owned[fd.Path][fd.Line] == "" {
@@ -492,6 +507,7 @@ func run(ctx context.Context, name string, group []ownedFile,
 		}
 		if !fd.Positive && len(opts.Dismissed) > 0 && opts.Dismissed[DismissalKey(fd.Rule, lineOf(fd.Path, fd.Line))] {
 			skipped++
+			skippedByRule[fd.Rule]++
 			continue
 		}
 		if opts.present != nil && strings.HasPrefix(fd.Rule, "sec.") && !opts.present(fd.Path, lineOf(fd.Path, fd.Line)) {
@@ -533,7 +549,7 @@ func run(ctx context.Context, name string, group []ownedFile,
 		}
 		return lr.Findings[i].Line < lr.Findings[j].Line
 	})
-	return lr, runCounts{dismissed: skipped, unanalyzed: unanalyzed}, nil
+	return lr, runCounts{dismissed: skipped, dismissedByRule: skippedByRule, unanalyzed: unanalyzed}, nil
 }
 
 // analyzeEach analyzes one file at a time, each bounded by AnalysisBudget, and

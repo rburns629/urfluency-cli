@@ -29,6 +29,12 @@ func Merge(labels []string, parts []Result) Result {
 			out.FrameworkRepos[fw] += n
 		}
 		out.Dismissed += p.Dismissed
+		for rule, n := range p.DismissedByRule {
+			if out.DismissedByRule == nil {
+				out.DismissedByRule = map[string]int{}
+			}
+			out.DismissedByRule[rule] += n
+		}
 		out.Git.Commits += p.Git.Commits
 		out.Git.ShortSubject += p.Git.ShortSubject
 		out.Git.Descriptive += p.Git.Descriptive
