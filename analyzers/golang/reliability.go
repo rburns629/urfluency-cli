@@ -21,6 +21,46 @@ func (c *checker) commentMentions(pos token.Pos, word string) bool {
 	return false
 }
 
+// suppressed reports whether pos's line carries a linter suppression, such as
+// //nolint:gosec or // #nosec, which marks a reviewed decision. It reads the
+// raw comments: CommentGroup.Text drops directives like //nolint:.
+func (c *checker) suppressed(pos token.Pos) bool {
+	line := c.fset.Position(pos).Line
+	for _, group := range c.file.Comments {
+		for _, cm := range group.List {
+			if c.fset.Position(cm.Pos()).Line == line && (strings.Contains(cm.Text, "nolint") || strings.Contains(cm.Text, "#nosec")) {
+				return true
+			}
+		}
+	}
+	return false
+}
+
+// boundedByContext reports whether a function takes a context.Context or
+// makes one with a deadline: requests made with it end when it does, which
+// is how Go code usually limits them.
+func (c *checker) boundedByContext(ft *ast.FuncType, body *ast.BlockStmt) bool {
+	if ft != nil && ft.Params != nil {
+		for _, field := range ft.Params.List {
+			if sel, ok := field.Type.(*ast.SelectorExpr); ok {
+				if id, ok := sel.X.(*ast.Ident); ok && c.imports[id.Name] == "context" && sel.Sel.Name == "Context" {
+					return true
+				}
+			}
+		}
+	}
+	bounded := false
+	ast.Inspect(body, func(n ast.Node) bool {
+		if call, ok := n.(*ast.CallExpr); ok {
+			if q := c.qualifiedName(call); q == "context.WithTimeout" || q == "context.WithDeadline" {
+				bounded = true
+			}
+		}
+		return !bounded
+	})
+	return bounded
+}
+
 // httpShortcuts use http.DefaultClient, which has no timeout.
 var httpShortcuts = map[string]bool{
 	"net/http.Get": true, "net/http.Head": true, "net/http.Post": true, "net/http.PostForm": true,
@@ -55,14 +95,23 @@ func (c *checker) hasRequestContext(ft *ast.FuncType) bool {
 
 // checkFreshContext flags context.Background and context.TODO in a function that
 // already has a request context, which drops its cancellation and deadline.
-// Cleanup that runs after cancellation (in a <-ctx.Done() case or an
-// if ctx.Err() != nil block) needs a fresh context, so it is skipped.
+// Cleanup that runs after cancellation (in a <-ctx.Done() case, an
+// if ctx.Err() != nil block, or after a <-ctx.Done() statement, as in a
+// graceful shutdown) needs a fresh context, so it is skipped.
 func (c *checker) checkFreshContext(ft *ast.FuncType, body *ast.BlockStmt) {
 	if body == nil || !c.hasRequestContext(ft) {
 		return
 	}
+	var cancelled token.Pos // where a <-ctx.Done() statement waited for cancellation
 	ast.Inspect(body, func(n ast.Node) bool {
+		if cancelled.IsValid() && n != nil && n.Pos() > cancelled {
+			return false
+		}
 		switch n := n.(type) {
+		case *ast.ExprStmt:
+			if receivesDone(n) {
+				cancelled = n.End()
+			}
 		case *ast.CommClause:
 			if receivesDone(n.Comm) {
 				return false
@@ -169,19 +218,21 @@ func limitsConcurrency(body *ast.BlockStmt) bool {
 
 // checkHTTPTimeout flags requests through http.DefaultClient and http.Client
 // values built without a Timeout, which can wait forever on a stalled server.
-func (c *checker) checkHTTPTimeout(n ast.Node) {
+// In a function bounded by a context, only http.Get and the like, which
+// cannot take one, are flagged.
+func (c *checker) checkHTTPTimeout(n ast.Node, bounded bool) {
 	switch n := n.(type) {
 	case *ast.CallExpr:
 		if httpShortcuts[c.qualifiedName(n)] {
 			c.report("go.http-without-timeout", n.Pos())
 		}
 	case *ast.SelectorExpr:
-		if id, ok := n.X.(*ast.Ident); ok && c.imports[id.Name] == "net/http" && n.Sel.Name == "DefaultClient" {
+		if id, ok := n.X.(*ast.Ident); ok && !bounded && c.imports[id.Name] == "net/http" && n.Sel.Name == "DefaultClient" {
 			c.report("go.http-without-timeout", n.Pos())
 		}
 	case *ast.CompositeLit:
 		sel, ok := n.Type.(*ast.SelectorExpr)
-		if !ok {
+		if !ok || bounded {
 			return
 		}
 		if id, ok := sel.X.(*ast.Ident); !ok || c.imports[id.Name] != "net/http" || sel.Sel.Name != "Client" {
@@ -189,7 +240,10 @@ func (c *checker) checkHTTPTimeout(n ast.Node) {
 		}
 		for _, elt := range n.Elts {
 			if kv, ok := elt.(*ast.KeyValueExpr); ok {
-				if key, ok := kv.Key.(*ast.Ident); ok && key.Name == "Timeout" {
+				// A client given its own Transport sets its limits there, such
+				// as dial and response-header timeouts, so long transfers are
+				// not cut off by an overall Timeout.
+				if key, ok := kv.Key.(*ast.Ident); ok && (key.Name == "Timeout" || key.Name == "Transport") {
 					return
 				}
 			}
