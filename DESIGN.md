@@ -81,12 +81,15 @@ operated, not by CLI versus website.
 
 | Repository | Visibility | Contents |
 | --- | --- | --- |
-| `rburns629/urfluency-cli` | Public, open source | The CLI; all analyzers and the rule catalog; the upload format (the CLI-to-API contract); the scoring formula that turns rule counts into bands; and the safety scanner's detection engine |
+| `rburns629/urfluency-cli` | Public, open source | The CLI; the analyzers and the baseline rules; the extension point (`analysis.RegisterExtension`); the upload format (the CLI-to-API contract); the scoring formula that turns rule counts into bands; and the safety scanner's detection engine. Building `cmd/urfluency` gives the community engine |
+| `rburns629/urfluency-engine` | Private | The private engine: rules registered as extensions, the per-language benchmarks and parity tooling, and the official CLI build, which Homebrew installs; the hosted scanner and the API import it too |
 | `rburns629/urfluency-app` | Private | The website and dashboard, API and accounts, badge serving, the hosted scan service (job queue, isolated workers, rate limits, abuse controls), and infrastructure and deployment configuration |
 | `rburns629/homebrew-tap` | Public | The Homebrew formula |
 
-- **Why.** Everything that runs on an engineer's laptop or decides their score can be
-  audited, which is urFluency's strongest trust argument for work machines. Scanner
+- **Why.** What leaves an engineer's laptop can always be audited: the upload code
+  is public, an upload holds counts and never code, and `upload --dry-run` prints
+  it. The private engine only reads files and adds findings to those counts, so
+  rules that took benchmarks to get right are not handed to competitors. Scanner
   rules are public, as in Semgrep and OSV; how scanning is operated stays private.
   Keeping the scoring formula public follows the honest-provenance principle.
 - **Shared code.** `urfluency-app` imports the public module at a pinned version, so

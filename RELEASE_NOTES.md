@@ -11,11 +11,11 @@ CLI rather than for people who work on it.
 
 ## v1.1.0 (2026-11-03)
 
-New Python checks for code that runs but does the wrong thing, and uploads that tell urfluency.com how much logic your code holds.
+Uploads tell urfluency.com how much logic your code holds, and the official build gains urFluency's private engine.
 
-- New: Python checks for code that runs but does the wrong thing: a dataclass whose instances all compare equal because it has no fields; a `__getattr__` that never raises `AttributeError` (which breaks `hasattr`, `copy`, and pickling); an `except` that only re-raises; a mutable class attribute changed through `self`; a test script that defines no tests; a dict or list subclass that passes its own options on as items, turns its attributes into items in `__setattr__`, or copies its entries into `__dict__`; and a loop `else` with no `break`. Each was checked against 15 well-known Python projects, about 10,600 files, with no false alarms.
-- Improved: `urfluency check` names the files it could not read, outside tests, since any of them keeps it from saying nothing was found; `--json` lists them as `unread`.
+- New: The official build, the one Homebrew installs, runs urFluency's private engine beside the open rules. It reads files only, like the rest, and your code still never leaves your machine. `urfluency version` names the engine a build runs, and uploads report it.
 - New: Each language's facts count its functions and their complexity on your own lines, so the official score can judge a small project by the logic it holds rather than its line count. Nothing about your code beyond those counts is sent.
+- Improved: `urfluency check` names the files it could not read, outside tests, since any of them keeps it from saying nothing was found; `--json` lists them as `unread`.
 
 ## v1.0.3 (2026-11-02)
 

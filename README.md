@@ -19,8 +19,12 @@ leave it. It also checks repositories for malicious code before you run them.
   engine runs the hosted scanner at [urfluency.com/scan](https://urfluency.com/scan).
 
 The CLI is free, and its source is open to read under the Functional Source
-License: the analyzers, the rule catalog, and the local scoring model are all
-here. Hosted scans beyond the free ones are paid; see
+License: the analyzers, the baseline rules, the upload format, and the local
+scoring model are here. The official build, the one Homebrew installs, adds
+urFluency's private engine: more rules that run on your machine like the rest
+and read files only. What leaves your machine stays open to inspect: uploads
+hold counts, never code, and `urfluency upload --dry-run` prints exactly what
+would be sent. `urfluency version` names the engine a build runs. Hosted scans beyond the free ones are paid; see
 [pricing](https://urfluency.com/pricing). Documentation:
 [urfluency.com/docs](https://urfluency.com/docs). Design notes: [DESIGN.md](DESIGN.md).
 
@@ -279,7 +283,7 @@ outcomes, and every rating names the model version that produced it.
 ### Local estimate and official score
 
 The CLI rates your code on your machine with an open model: you can read
-exactly how every score is worked out. That is your **local estimate**, and the
+exactly how every score is worked out from its findings. That is your **local estimate**, and the
 report labels it so.
 
 When you upload, urFluency scores the same counts with its **official model**,

@@ -25,6 +25,9 @@ const Format = "1"
 // Facts are one upload's counts.
 type Facts struct {
 	Format string `json:"format"`
+	// Engine names the engine that found the findings (analysis.Engine):
+	// "community" for a build of the public source alone.
+	Engine string `json:"engine,omitempty"`
 	// Git is the scan of the Git repositories, Folders that of the project
 	// folders without Git; either can be absent.
 	Git     *Scan `json:"git,omitempty"`
@@ -200,7 +203,7 @@ type Tally struct {
 // the folders without Git (either may be empty), and the prompting grades,
 // when sessions were read.
 func New(git, folders analysis.Result, grades *sessions.Grades) Facts {
-	f := Facts{Format: Format}
+	f := Facts{Format: Format, Engine: analysis.Engine()}
 	if git.Repos > 0 || len(git.Languages) > 0 {
 		s := FromResult(git)
 		f.Git = &s

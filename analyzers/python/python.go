@@ -47,7 +47,6 @@ func (Analyzer) Analyze(ctx context.Context, files []analysis.File) ([]analysis.
 		c := checker{tree: tree, path: f.Path, isTest: analysis.IsTestPath(f.Path), frameworks: importedFrameworks(tree)}
 		parsing.Walk(tree.Root(), c.visit)
 		parsing.Walk(tree.Root(), c.visitIdioms)
-		c.checkTestFile(tree.Root())
 		if !c.isTest {
 			for _, fn := range parsing.Cognitive(tree, parsing.PythonComplexity) {
 				c.findings = append(c.findings, analysis.EvidenceOf(f.Path, fn.Line, fn.Complexity)...)
@@ -91,11 +90,6 @@ func (c *checker) visit(n *ts.Node) bool {
 		}
 	case "except_clause":
 		c.checkExcept(n)
-		c.checkReraise(n)
-	case "class_definition":
-		c.checkClass(n)
-	case "for_statement", "while_statement":
-		c.checkLoopElse(n)
 	case "comparison_operator":
 		if parsing.HasToken(n, "is", "is not") {
 			for _, operand := range parsing.NamedChildren(n) {
@@ -112,7 +106,6 @@ func (c *checker) visit(n *ts.Node) bool {
 		c.checkCallSecurity(n)
 	case "decorated_definition":
 		c.checkDecorated(n)
-		c.checkDataclass(n)
 	case "assignment":
 		c.checkDebugSetting(n)
 	case "comment":
