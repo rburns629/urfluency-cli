@@ -55,6 +55,22 @@ export function List({ items, show }) {
 	if got := findings(t, JavaScript{}, "src/List.jsx", src); !reflect.DeepEqual(got, want) {
 		t.Errorf("got %v\nwant %v", got, want)
 	}
+	// The left side of || ?? && and the condition of ?: always run; the other
+	// side and the branches may not.
+	operands := `import { useContext } from 'react';
+export function Note({ fallback, on }) {
+  const label = useEnv()?.label || "this install";
+  const count = (useAuth().user?.teams.length ?? 0) === 0;
+  const theme = useTheme() ? 1 : 2;
+  const late = fallback || useLate();
+  const either = on ? useA() : useB();
+  return null;
+}
+`
+	want = []string{"react.hook-in-condition:6", "react.hook-in-condition:7", "react.hook-in-condition:7"}
+	if got := findings(t, JavaScript{}, "src/Note.jsx", operands); !reflect.DeepEqual(got, want) {
+		t.Errorf("operands: got %v\nwant %v", got, want)
+	}
 }
 
 func TestAngularFastifyExpressRules(t *testing.T) {

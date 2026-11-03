@@ -16,11 +16,21 @@ var generatedMarkers = [][]byte{
 	[]byte("automatically generated"),
 }
 
+// scaffoldMarkers are written by tools that start a file for its owner to
+// edit, such as django-admin startproject at the top of settings.py and
+// urls.py. Those files are the project's own code, not generated output.
+var scaffoldMarkers = [][]byte{[]byte("django-admin startproject"), []byte("django-admin startapp")}
+
 // GeneratedHeader reports whether the first 512 bytes of content mark the file
 // as generated. Markers match case-insensitively and as whole words, so a
 // comment about a "regenerated" cache does not count.
 func GeneratedHeader(content []byte) bool {
 	head := bytes.ToLower(content[:min(len(content), 512)])
+	for _, m := range scaffoldMarkers {
+		if bytes.Contains(head, m) {
+			return false
+		}
+	}
 	for _, m := range generatedMarkers {
 		for i := 0; ; {
 			j := bytes.Index(head[i:], m)

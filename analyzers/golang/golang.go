@@ -150,8 +150,11 @@ func (c *checker) run() {
 // checkBody applies the statement and expression checks to a function body.
 func (c *checker) checkBody(typ *ast.FuncType, body *ast.BlockStmt, isTest, allowPanic bool, checkedAsserts map[*ast.TypeAssertExpr]bool) {
 	fnLimited := limitsConcurrency(body)
+	bounded := c.boundedByContext(typ, body)
 	c.checkSendLeak(body)
-	c.checkFreshContext(typ, body)
+	if !isTest {
+		c.checkFreshContext(typ, body)
+	}
 	ast.Inspect(body, func(n ast.Node) bool {
 		switch n := n.(type) {
 		case *ast.SwitchStmt:
@@ -175,10 +178,12 @@ func (c *checker) checkBody(typ *ast.FuncType, body *ast.BlockStmt, isTest, allo
 			c.checkGoStmt(n)
 		case *ast.FuncLit:
 			c.checkSendLeak(n.Body)
-			c.checkFreshContext(n.Type, n.Body)
+			if !isTest {
+				c.checkFreshContext(n.Type, n.Body)
+			}
 		case *ast.SelectorExpr, *ast.CompositeLit:
 			if !isTest {
-				c.checkHTTPTimeout(n)
+				c.checkHTTPTimeout(n, bounded)
 			}
 		case *ast.AssignStmt:
 			if !isTest {
@@ -194,11 +199,17 @@ func (c *checker) checkBody(typ *ast.FuncType, body *ast.BlockStmt, isTest, allo
 				c.report("go.unchecked-type-assertion", n.Pos())
 			}
 		case *ast.KeyValueExpr:
-			c.checkInsecureTLS(n)
-		case *ast.CallExpr:
-			c.checkSecurity(n)
+			// Tests talk to httptest's TLS servers and build queries from
+			// fixtures; neither reaches a user.
 			if !isTest {
-				c.checkHTTPTimeout(n)
+				c.checkInsecureTLS(n)
+			}
+		case *ast.CallExpr:
+			if !isTest {
+				c.checkSecurity(n)
+			}
+			if !isTest {
+				c.checkHTTPTimeout(n, bounded)
 			}
 			if id, ok := n.Fun.(*ast.Ident); ok && id.Name == "panic" && !allowPanic {
 				if _, builtin := c.info.Uses[id].(*types.Builtin); builtin {

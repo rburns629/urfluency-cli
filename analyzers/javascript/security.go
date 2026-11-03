@@ -260,7 +260,9 @@ func (c *checker) checkNodeSecurity(n *ts.Node) {
 }
 
 // isConditionalHook reports a hook call nested under a condition or loop before
-// reaching its enclosing function.
+// reaching its enclosing function. Only the parts that may not run count: the
+// right side of && || ??, the branches of ?: and if, not their conditions or
+// left sides, which always run, as in useTheme() ?? defaultTheme.
 func (c *checker) isConditionalHook(call, fn *ts.Node, prop string, object *ts.Node) bool {
 	name := c.tree.Text(fn)
 	if prop != "" {
@@ -272,21 +274,27 @@ func (c *checker) isConditionalHook(call, fn *ts.Node, prop string, object *ts.N
 	if !hookName.MatchString(name) {
 		return false
 	}
-	for p := c.tree.Parent(call); p != nil; p = c.tree.Parent(p) {
+	child := call
+	for p := c.tree.Parent(call); p != nil; child, p = p, c.tree.Parent(p) {
 		switch p.Kind() {
 		case "function_declaration", "function_expression", "arrow_function", "method_definition", "function":
 			return false
-		case "if_statement", "for_statement", "for_in_statement", "while_statement", "do_statement",
-			"ternary_expression", "switch_case":
+		case "for_statement", "for_in_statement", "while_statement", "do_statement", "switch_case":
 			return true
+		case "if_statement", "ternary_expression":
+			if !sameNode(p.ChildByFieldName("condition"), child) {
+				return true
+			}
 		case "binary_expression":
-			if parsing.HasToken(p, "&&", "||", "??") {
+			if parsing.HasToken(p, "&&", "||", "??") && sameNode(p.ChildByFieldName("right"), child) {
 				return true
 			}
 		}
 	}
 	return false
 }
+
+func sameNode(a, b *ts.Node) bool { return a != nil && b != nil && a.Id() == b.Id() }
 
 // checkListKeys inspects items.map(cb) where cb returns JSX, flagging a missing
 // key or a key taken from the callback's index parameter.
