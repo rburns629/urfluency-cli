@@ -218,3 +218,22 @@ func TestForceTry(t *testing.T) {
 		t.Errorf("got %s, want force-try on lines 2 to 4", got)
 	}
 }
+
+// Documentation catalogs and examples show placeholder http URLs.
+func TestPlaceholderURLsInDocsAndExamples(t *testing.T) {
+	src := "let u = URL(string: \"http://number-trivia.com\")!\n"
+	for _, p := range []string{"Sources/App/Documentation.docc/Tutorials/code-0005.swift", "Examples/CaseStudies/Effects.swift"} {
+		for _, f := range findings(t, p, src) {
+			if strings.HasPrefix(f, "swift.http-url-literal") {
+				t.Errorf("%s: got %s", p, f)
+			}
+		}
+	}
+	found := false
+	for _, f := range findings(t, "Sources/App/Client.swift", src) {
+		found = found || strings.HasPrefix(f, "swift.http-url-literal")
+	}
+	if !found {
+		t.Error("app code: want the http URL reported")
+	}
+}

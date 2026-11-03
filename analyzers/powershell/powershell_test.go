@@ -136,3 +136,21 @@ func TestNativeNamesAreNotAliases(t *testing.T) {
 		}
 	}
 }
+
+// Pester tests use Invoke-Expression and globals to drive prompts; scripts
+// in the module are still reported.
+func TestTestsMayUseInvokeExpressionAndGlobals(t *testing.T) {
+	src := "Invoke-Expression $cmd\n$global:GitPromptSettings = 1\n"
+	got, err := Analyzer{}.Analyze(context.Background(), []analysis.File{{Path: "test/DefaultPrompt.Tests.ps1", Content: []byte(src)}})
+	if err != nil {
+		t.Fatal(err)
+	}
+	for _, f := range got {
+		if f.Rule == "powershell.invoke-expression" || f.Rule == "powershell.global-variable" {
+			t.Errorf("test file: got %s", f.Rule)
+		}
+	}
+	if n := len(analyze(t, src)); n < 2 {
+		t.Errorf("script: got %d findings, want both", n)
+	}
+}

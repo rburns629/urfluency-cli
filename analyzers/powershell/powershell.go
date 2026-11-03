@@ -108,7 +108,7 @@ func (c *checker) visit(n *ts.Node) bool {
 		}
 		lt := strings.ToLower(c.tree.Text(left))
 		switch {
-		case strings.HasPrefix(lt, "$global:"):
+		case strings.HasPrefix(lt, "$global:") && !analysis.IsTestPath(c.path):
 			c.report("powershell.global-variable", n)
 		case strings.HasSuffix(lt, "servercertificatevalidationcallback") && strings.Contains(strings.ToLower(c.tree.Text(n)), "$true"):
 			c.report("powershell.skip-certificate-check", n)
@@ -126,7 +126,7 @@ func (c *checker) visit(n *ts.Node) bool {
 func (c *checker) checkCommand(n *ts.Node) {
 	name := strings.ToLower(c.commandName(n))
 	switch {
-	case name == "invoke-expression" || name == "iex":
+	case (name == "invoke-expression" || name == "iex") && !analysis.IsTestPath(c.path):
 		c.report("powershell.invoke-expression", n)
 	case aliases[name]:
 		c.report("powershell.cmdlet-alias", n)
