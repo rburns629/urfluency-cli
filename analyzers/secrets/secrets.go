@@ -102,7 +102,7 @@ func (Scanner) Analyze(ctx context.Context, files []analysis.File) ([]analysis.F
 		for i, line := range lines {
 			text := string(line)
 			rule := match(text, generic, config)
-			if rule == "" || (rule == "sec.api-token" && firebaseWebKey(text, lines, i)) {
+			if rule == "" || (rule == "sec.api-token" && firebaseWebKey(text, lines, i)) || (rule == "sec.hardcoded-password" && algoliaSearchKey(text, lines, i)) {
 				continue
 			}
 			findings = append(findings, analysis.Finding{Rule: rule, Path: f.Path, Line: i + 1})
@@ -111,20 +111,58 @@ func (Scanner) Analyze(ctx context.Context, files []analysis.File) ([]analysis.F
 	return findings, nil
 }
 
-// firebaseKey matches the apiKey entry of a Firebase web config.
-var firebaseKey = regexp.MustCompile(`\bapiKey["']?\s*:\s*["']AIza[0-9A-Za-z_-]{35}["']`)
+var (
+	// firebaseKey matches the apiKey entry of a Firebase web config.
+	firebaseKey = regexp.MustCompile(`\bapiKey["']?\s*:\s*["']AIza[0-9A-Za-z_-]{35}["']`)
+	// firebaseEnvKey matches a Google key set as a Firebase web config
+	// variable, such as NEXT_PUBLIC_FIREBASE_API_KEY=AIza… in an env file or
+	// FIREBASE_API_KEY: "AIza…" in YAML.
+	firebaseEnvKey = regexp.MustCompile(`(?i)\b(?:[A-Z]+_)*FIREBASE_(?:WEB_)?API_?KEY["']?\s*[:=]\s*["']?AIza[0-9A-Za-z_-]{35}\b`)
+	// firebaseEnvName names a Firebase web config variable on its own, as in
+	// Firebase App Hosting's "- variable: NEXT_PUBLIC_FIREBASE_API_KEY"
+	// followed by "value: AIza…".
+	firebaseEnvName = regexp.MustCompile(`(?i)\b(?:[A-Z]+_)*FIREBASE_(?:WEB_)?API_?KEY\b`)
+	googleKeyValue  = regexp.MustCompile(`^\s*(?:-\s*)?value\s*:\s*["']?AIza[0-9A-Za-z_-]{35}["']?\s*$`)
+)
 
-// firebaseWebKey reports whether line i is the apiKey of a Firebase web config:
-// an apiKey entry with authDomain and messagingSenderId or appId within ten
-// lines. Firebase web keys ship to every browser by design; access is governed by
-// Firebase Security Rules, so they are not secrets. Other Google keys are.
+// firebaseWebKey reports whether line i is the API key of a Firebase web
+// config: an apiKey entry with authDomain and messagingSenderId or appId
+// within ten lines, or a variable named for the Firebase API key, set on the
+// line or named on one of the two lines before a value line. Firebase web keys
+// ship to every browser by design; access is governed by Firebase Security
+// Rules, so they are not secrets. Other Google keys are.
 func firebaseWebKey(line string, lines [][]byte, i int) bool {
+	if firebaseEnvKey.MatchString(line) {
+		return true
+	}
+	if googleKeyValue.MatchString(line) {
+		for j := max(0, i-2); j < i; j++ {
+			if firebaseEnvName.Match(lines[j]) {
+				return true
+			}
+		}
+	}
 	if !firebaseKey.MatchString(line) {
 		return false
 	}
 	window := bytes.Join(lines[max(0, i-10):min(len(lines), i+11)], []byte("\n"))
 	return bytes.Contains(window, []byte("authDomain")) &&
 		(bytes.Contains(window, []byte("messagingSenderId")) || bytes.Contains(window, []byte("appId")))
+}
+
+// algoliaKey matches the apiKey entry of an Algolia client config.
+var algoliaKey = regexp.MustCompile(`\bapiKey["']?\s*:\s*["'][0-9a-f]{32}["']`)
+
+// algoliaSearchKey reports whether line i is the apiKey of an Algolia search
+// config: an apiKey entry with indexName and appId within ten lines, as
+// DocSearch and InstantSearch use. Search-only keys ship to every browser by
+// design.
+func algoliaSearchKey(line string, lines [][]byte, i int) bool {
+	if !algoliaKey.MatchString(line) {
+		return false
+	}
+	window := bytes.Join(lines[max(0, i-10):min(len(lines), i+11)], []byte("\n"))
+	return bytes.Contains(window, []byte("indexName")) && bytes.Contains(window, []byte("appId"))
 }
 
 // match returns the first rule a line violates, or "". Generic checks (URL
@@ -142,14 +180,15 @@ func match(line string, generic, config bool) string {
 	if !generic || isComment(line) {
 		return ""
 	}
-	if m := urlCredentials.FindStringSubmatch(line); m != nil && !isPlaceholder(m[1]+m[2]) && !localHosts[strings.ToLower(m[3])] {
+	if m := urlCredentials.FindStringSubmatch(line); m != nil && !isPlaceholder(m[1]+m[2]) && !namesCredential(m[1]+m[2]) &&
+		!localHosts[strings.ToLower(m[3])] && !exampleHost(m[3]) {
 		return "sec.credentials-in-url"
 	}
 	m := assignment.FindStringSubmatch(line)
 	if m == nil && config {
 		m = unquoted.FindStringSubmatch(line)
 	}
-	if m != nil && !isPlaceholder(m[1]) && !namesCredential(m[1]) && !wordsOnly.MatchString(m[1]) && entropy(m[1]) >= 3.0 {
+	if m != nil && !isPlaceholder(m[1]) && !namesCredential(m[1]) && !wordsOnly.MatchString(m[1]) && !constantWords.MatchString(m[1]) && entropy(m[1]) >= 3.0 {
 		return "sec.hardcoded-password"
 	}
 	return ""
@@ -160,12 +199,28 @@ func match(line string, generic, config bool) string {
 // passwords essentially never are.
 var wordsOnly = regexp.MustCompile(`^[a-z]{2,}(?:[-_.][a-z0-9]{2,})+$`)
 
+// constantWords matches upper-case words joined by "_", such as YOUR_API_KEY
+// or API_KEY_UNUSED: placeholders and constant names, not keys.
+var constantWords = regexp.MustCompile(`^[A-Z]{2,}(?:_[A-Z0-9]{2,})+$`)
+
 // namesCredential reports whether a value names a credential rather than holding
 // one, such as the autocomplete token "new-password" in a JSX ternary.
 func namesCredential(v string) bool {
 	lower := strings.ToLower(v)
 	for _, word := range []string{"password", "passwd", "secret", "token"} {
 		if strings.Contains(lower, word) {
+			return true
+		}
+	}
+	return false
+}
+
+// exampleHost reports example.com, example.org, and example.net, the domains
+// documentation uses (RFC 2606), where a URL's credentials are an example.
+func exampleHost(host string) bool {
+	h := strings.ToLower(strings.TrimRight(host, "."))
+	for _, d := range []string{"example.com", "example.org", "example.net"} {
+		if h == d || strings.HasSuffix(h, "."+d) {
 			return true
 		}
 	}

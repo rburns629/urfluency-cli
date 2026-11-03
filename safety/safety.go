@@ -33,7 +33,7 @@ import (
 )
 
 // Version identifies the rule set; reports carry it so results can be compared.
-const Version = "0.1"
+const Version = "0.2"
 
 // Severity says how bad a behavior is if it is what it looks like.
 type Severity string
@@ -224,6 +224,9 @@ func Scan(ctx context.Context, dir string, limits Limits) (Report, error) {
 		return a < b
 	})
 	var files []analysis.File
+	// unread counts the skipped files outside tests and fixtures, which make
+	// the scan incomplete; a test's oversized fixture runs nothing.
+	unread := 0
 	for _, e := range entries {
 		if len(files)+r.Skipped >= limits.MaxFiles {
 			r.Truncated = true
@@ -232,6 +235,9 @@ func Scan(ctx context.Context, dir string, limits Limits) (Report, error) {
 		content, err := readBounded(e.path, e.rel, e.size, limits.MaxFileSize)
 		if err != nil {
 			r.Skipped++
+			if where, ok := buildOnly(e.rel); !ok || where != "tests" {
+				unread++
+			}
 			continue
 		}
 		if !isExecutable(content) && textual(e.rel, content) {
@@ -268,14 +274,17 @@ func Scan(ctx context.Context, dir string, limits Limits) (Report, error) {
 	})
 	r.Verdict, r.Score = judge(r.Findings)
 	// What was not read could hold anything, so an incomplete scan never says
-	// nothing was found.
+	// nothing was found, unless all it skipped were tests' files.
 	if r.Truncated || r.Skipped > 0 {
-		if r.Verdict == NoIndicators {
+		if r.Verdict == NoIndicators && (r.Truncated || unread > 0) {
 			r.Verdict = ReviewRecommended
 		}
 		var why []string
 		if r.Skipped > 0 {
 			why = append(why, fmt.Sprintf("%d files were over the size limit or unreadable", r.Skipped))
+		}
+		if r.Skipped > unread {
+			why = append(why, fmt.Sprintf("%d of them in tests", r.Skipped-unread))
 		}
 		if r.Truncated {
 			why = append(why, fmt.Sprintf("the scan stopped at %d files", limits.MaxFiles))
@@ -329,22 +338,54 @@ func installFile(rel string) bool {
 func buildOnly(p string) (string, bool) {
 	base := path.Base(p)
 	switch {
-	case analysis.IsTestPath(p) || strings.Contains("/"+p, "/testdata/") || strings.Contains("/"+p, "/fixtures/"):
+	case analysis.IsTestPath(p) || inDir(p, "testdata", "fixtures", "fixture", "_fixture", "_fixtures", "__fixtures__", "__mocks__", "e2e", "integration"):
 		return "tests", true
+	case inDir(p, "examples", "example", "demo", "demos", "samples", "sample", "docs_src"):
+		return "example code", true
 	case strings.HasPrefix(p, ".github/workflows/") || base == ".gitlab-ci.yml" || strings.HasPrefix(p, ".circleci/") || base == "azure-pipelines.yml":
 		return "CI", true
-	case base == "Dockerfile" || strings.HasPrefix(base, "Dockerfile.") || strings.HasSuffix(base, ".dockerfile"):
+	case base == "Dockerfile" || strings.HasPrefix(base, "Dockerfile.") || strings.HasSuffix(base, ".dockerfile") || composeFile(base):
 		return "container builds", true
 	}
 	return "", false
 }
 
-// softenOutsideRuntime lowers a finding in tests, CI, or container builds by one
-// severity and to low confidence: it is still reported, but it does not run
-// when someone installs or uses the project.
+// composeFile reports a Docker Compose file, which starts containers, often
+// a local database with a development password, rather than running on
+// install.
+func composeFile(base string) bool {
+	switch base {
+	case "compose.yaml", "compose.yml", "docker-compose.yaml", "docker-compose.yml":
+		return true
+	}
+	return strings.HasPrefix(base, "docker-compose.") && (strings.HasSuffix(base, ".yml") || strings.HasSuffix(base, ".yaml"))
+}
+
+// inDir reports whether a path is inside a directory with one of the names,
+// at any depth.
+func inDir(p string, names ...string) bool {
+	for _, n := range names {
+		if strings.Contains("/"+p, "/"+n+"/") {
+			return true
+		}
+	}
+	return false
+}
+
+// softenOutsideRuntime lowers a finding that does not run when someone
+// installs or uses the project. In tests and example code it becomes a note:
+// listed, but not changing the verdict, since scanners' and parsers' tests
+// hold attack strings as data and examples hold demo credentials; an install
+// hook that runs such a file is reported on its own. In CI and container
+// builds it drops one severity, to low confidence.
 func softenOutsideRuntime(f Finding) Finding {
 	where, ok := buildOnly(f.Path)
 	if !ok || f.Rule == "safety.executable" {
+		return f
+	}
+	if where == "tests" || where == "example code" {
+		f.Severity, f.Confidence = Low, Weak
+		f.Why = "In " + where + ", which run only when someone runs them, not on install; " + strings.ToLower(f.Why[:1]) + f.Why[1:]
 		return f
 	}
 	switch f.Severity {

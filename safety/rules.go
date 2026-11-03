@@ -110,7 +110,10 @@ var lineRules = []lineRule{
 		High, Possible, regexp.MustCompile(`(?i)(discord(app)?\.com/api/webhooks/|api\.telegram\.org/bot)`), isCode},
 	{"safety.env-dump", "data-collection", "Serializes every environment variable",
 		"Environment variables often hold tokens and keys; collecting all of them is rarely needed.",
-		Medium, Possible, regexp.MustCompile(`JSON\.stringify\(\s*process\.env\s*\)|dict\(\s*os\.environ\s*\)|os\.environ\.copy\(\)|json\.dumps\(\s*(dict\()?os\.environ`), isCode},
+		// Copying the environment, as os.environ.copy() or dict(os.environ)
+		// for a subprocess, keeps it on the machine; serializing it is what
+		// sending it needs.
+		Medium, Possible, regexp.MustCompile(`JSON\.stringify\(\s*process\.env\s*[,)]|json\.dumps\(\s*(dict\()?os\.environ\b`), isCode},
 
 	// Credential access.
 	{"safety.ssh-keys", "credentials", "Reads SSH private keys",
@@ -121,7 +124,7 @@ var lineRules = []lineRule{
 		Medium, Possible, regexp.MustCompile(`\.aws/credentials|\.config/gcloud|application_default_credentials\.json|\.kube/config|\.docker/config\.json`), isCode},
 	{"safety.tool-credentials", "credentials", "Reads package or HTTP credential files",
 		"Package managers and HTTP clients read .netrc, .npmrc, and .pypirc legitimately; elsewhere it is worth a look.",
-		Low, Weak, regexp.MustCompile(`\.npmrc|\.pypirc|\.netrc`), isCode},
+		Low, Weak, toolCredentials, isCode},
 	{"safety.browser-data", "credentials", "Reads browser profiles",
 		"Browser Login Data, Cookies, and Local State files hold saved passwords and sessions.",
 		High, Possible, regexp.MustCompile(`(?i)(google[/\\]chrome|chromium|bravesoftware|microsoft[/\\]edge|mozilla[/\\]firefox)[^"'\n]{0,80}(login data|cookies|local state|logins\.json|key4\.db)`), isCode},
@@ -302,6 +305,21 @@ var (
 	hexEscapes = regexp.MustCompile(`(\\x[0-9a-fA-F]{2}){80,}`)
 )
 
+// mediaPrefixes start the base64 of image, font, audio, video, and PDF
+// files, which source embeds as data URIs and test fixtures.
+var mediaPrefixes = []string{"iVBORw0KGgo", "/9j/", "R0lGOD", "UklGR", "PHN2Zy", "PD94bWwg", "JVBERi0", "d09GR", "d09GMg", "AAEAAA", "T1RUTw", "AAAAIGZ0eXA", "AAAAGGZ0eXA", "AAAAHGZ0eXA", "T2dnUw", "SUQz", "GkXfo"}
+
+// mediaBase64 reports whether a base64 run is a media file's: it starts
+// with one's signature.
+func mediaBase64(s string) bool {
+	for _, p := range mediaPrefixes {
+		if strings.HasPrefix(s, p) {
+			return true
+		}
+	}
+	return false
+}
+
 // around returns a long line from shortly before offset, so its excerpt shows
 // the match; short lines are returned whole.
 func around(line string, offset int) string {
@@ -357,7 +375,7 @@ func checkFile(f analysis.File) []Finding {
 			out = append(out, fd)
 		}
 		if isCode(f.Path) && !generated(f.Path) {
-			if loc := longBase64.FindStringIndex(line); loc != nil {
+			if loc := longBase64.FindStringIndex(line); loc != nil && !mediaBase64(line[loc[0]+1:]) {
 				out = append(out, Finding{Rule: "safety.encoded-blob", Category: "obfuscation", Title: "Large encoded blob in source",
 					Severity: Medium, Confidence: Possible, Path: f.Path, Line: i + 1, Evidence: excerpt(line[:min(len(line), loc[0]+60)]),
 					Why: "Kilobytes of base64 in source code often hide a payload that is decoded at run time."})
@@ -383,12 +401,21 @@ func generated(p string) bool {
 	return false
 }
 
+// toolCredentials is a path to a package or HTTP credential file in the
+// user's home: ~/, a home directory variable or call, a home path, or a path
+// join before the file name, so prose that names .npmrc is not code that
+// reads it.
+var toolCredentials = regexp.MustCompile(`(~[/\\]|\$HOME|\$\{HOME\}|%USERPROFILE%|env\.HOME\b|env\[["']HOME|getenv\(["']HOME|environ(\.get\(|\[)["']HOME|homedir\(\)|expanduser|Path\.home\(\)|UserHomeDir\(\)|home_dir\(\)|/root/|/home/|\.join\(|Join\()[^\n]{0,60}[/\\"' ,]\.(npmrc|pypirc|netrc)\b`)
+
 var (
-	collects  = regexp.MustCompile(`os\.hostname\(|os\.userInfo\(|os\.networkInterfaces\(|getpass\.getuser\(|socket\.gethostname\(|platform\.node\(|os\.getlogin\(|whoami`)
-	sends     = regexp.MustCompile(`\b(fetch|axios\.(post|put)|requests\.(post|put)|http\.request|https\.request|urllib\.request\.urlopen|XMLHttpRequest)\b`)
-	hardURL   = regexp.MustCompile(`https?://[a-zA-Z0-9.-]+\.[a-z]{2,}`)
-	fetches   = regexp.MustCompile(`\b(fetch|requests\.get|urlopen|http\.get|https\.get|axios\.get)\s*\(`)
-	evaluates = regexp.MustCompile(`\beval\s*\(|new\s+Function\s*\(|\bexec\s*\(`)
+	collects = regexp.MustCompile(`os\.hostname\(|os\.userInfo\(|os\.networkInterfaces\(|getpass\.getuser\(|socket\.gethostname\(|platform\.node\(|os\.getlogin\(|whoami`)
+	sends    = regexp.MustCompile(`\b(fetch|axios\.(post|put)|requests\.(post|put)|http\.request|https\.request|urllib\.request\.urlopen|XMLHttpRequest)\b`)
+	hardURL  = regexp.MustCompile(`https?://[a-zA-Z0-9.-]+\.[a-z]{2,}`)
+	fetches  = regexp.MustCompile(`\b(fetch|requests\.get|urlopen|http\.get|https\.get|axios\.get)\s*\(`)
+	// evaluates is eval, exec, or new Function called as a function, not as
+	// a method: regex.exec(…) matches a pattern and model.eval() changes a
+	// model's mode; neither runs code.
+	evaluates = regexp.MustCompile(`(?:^|[^.\w$])(?:eval|exec)\s*\(|new\s+Function\s*\(`)
 )
 
 // checkCoOccurrence flags combinations that are only suspicious together: a
@@ -452,6 +479,76 @@ func checkRepository(files []analysis.File) []Finding {
 
 var risky = regexp.MustCompile(`(?i)\b(curl|wget|node\s+-e|python\s+-c|https?://|eval|base64)\b`)
 
+// installTools are commands install hooks commonly run that are not always
+// declared as dependencies: package managers' own steps and build and Git
+// hook tools.
+var installTools = map[string]bool{
+	"husky": true, "lefthook": true, "simple-git-hooks": true, "patch-package": true, "prisma": true, "nuxt": true, "nuxi": true,
+	"opencollective": true, "opencollective-postinstall": true, "node-gyp": true, "node-gyp-build": true, "prebuild-install": true,
+	"tsc": true, "ngcc": true, "svelte-kit": true, "astro": true, "turbo": true, "lerna": true, "nx": true, "vite": true, "rollup": true,
+	"webpack": true, "esbuild": true, "tsup": true, "babel": true, "rimraf": true, "del-cli": true, "is-ci": true, "electron-builder": true,
+	"echo": true, "exit": true, "true": true,
+}
+
+// scriptSplit separates the commands of an npm script.
+var scriptSplit = regexp.MustCompile(`\s*(?:&&|\|\||;|\|)\s*`)
+
+// expandScript returns an npm script with the scripts it runs through npm,
+// yarn, pnpm, or bun appended, and whether every command in it runs only a
+// declared dependency or a common install tool. A command that runs a file
+// from the repository, or anything else, is not a tool.
+func expandScript(script string, scripts, deps map[string]string, depth int) (string, bool) {
+	expanded, tools := script, true
+	for _, cmd := range scriptSplit.Split(strings.TrimSpace(script), -1) {
+		words := strings.Fields(cmd)
+		for len(words) > 0 && (strings.Contains(words[0], "=") || words[0] == "cross-env") {
+			words = words[1:] // FOO=1 or cross-env FOO=1 before the command
+		}
+		if len(words) == 0 {
+			continue
+		}
+		head := words[0]
+		if (head == "npx" || head == "bunx") && len(words) > 1 {
+			head = words[1]
+		}
+		if name, ok := runsScript(words); ok {
+			if body, ok := scripts[name]; ok && depth < 3 {
+				sub, subTools := expandScript(body, scripts, deps, depth+1)
+				expanded += "\n" + sub
+				tools = tools && subTools
+			}
+			continue
+		}
+		if !installTools[head] && !declared(head, deps) {
+			tools = false
+		}
+	}
+	return expanded, tools
+}
+
+// runsScript reports the package script a command runs: npm run NAME, yarn
+// NAME, pnpm run NAME, or bun run NAME.
+func runsScript(words []string) (string, bool) {
+	switch {
+	case len(words) >= 3 && (words[0] == "npm" || words[0] == "pnpm" || words[0] == "yarn" || words[0] == "bun") && (words[1] == "run" || words[1] == "run-script"):
+		return words[2], true
+	case len(words) >= 2 && (words[0] == "yarn" || words[0] == "pnpm") && !strings.HasPrefix(words[1], "-") && words[1] != "add" && words[1] != "dlx" && words[1] != "exec":
+		return words[1], true
+	}
+	return "", false
+}
+
+// declared reports whether a command is a declared dependency's: its name,
+// or a scoped package's last part.
+func declared(cmd string, deps map[string]string) bool {
+	for name := range deps {
+		if name == cmd || strings.HasSuffix(name, "/"+cmd) {
+			return true
+		}
+	}
+	return false
+}
+
 func checkPackageJSON(f analysis.File) []Finding {
 	// Values are decoded one by one, so one that is not a string, which npm
 	// ignores, cannot make the whole manifest unreadable to the scan.
@@ -473,12 +570,18 @@ func checkPackageJSON(f analysis.File) []Finding {
 			continue
 		}
 		sev, conf := Medium, Possible
-		if risky.MatchString(script) {
+		why := "npm runs " + hook + " scripts automatically during install, before anyone has used the package."
+		expanded, tools := expandScript(script, scripts, deps, 0)
+		switch {
+		case risky.MatchString(expanded):
 			sev, conf = High, Likely
+		case tools:
+			sev, conf = Low, Weak
+			why = "npm runs " + hook + " scripts during install; this one runs only the project's declared dependencies and common build tools."
 		}
 		out = append(out, Finding{Rule: "safety.npm-install-script", Category: "install", Title: "Runs a script when the package is installed",
 			Severity: sev, Confidence: conf, Path: f.Path, Line: lineOf(f.Content, `"`+hook+`"`), Evidence: excerpt(hook + ": " + script),
-			Why: "npm runs " + hook + " scripts automatically during install, before anyone has used the package."})
+			Why: why})
 	}
 	for name, spec := range deps {
 		if strings.HasPrefix(spec, "http://") || strings.HasPrefix(spec, "https://") || strings.HasPrefix(spec, "git+") || strings.HasPrefix(spec, "git://") {

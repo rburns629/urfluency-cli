@@ -9,6 +9,18 @@ sums up the release in one line. Each change is a bullet that starts with
 `New:`, `Improved:`, `Fixed:`, or `Security:`, written for people who use the
 CLI rather than for people who work on it.
 
+## v1.0.3 (2026-11-02)
+
+Fewer false alarms from `urfluency check`, tested against 44 well-known open-source projects.
+
+- Fixed: A Firebase web API key in an env file or Firebase App Hosting's `apphosting.yaml`, and an Algolia search key beside its app ID and index name, are not reported as secrets. Both ship to every browser by design.
+- Fixed: A regular expression's `exec()` or a model's `eval()` beside a network request is not reported as fetching and running code.
+- Fixed: Text that names `.npmrc`, `.netrc`, or `.pypirc` is not reported as reading them; code that builds a path to them in the home folder still is.
+- Fixed: Install hooks that run only the project's own dependencies or common build tools, such as `husky`, `prisma generate`, or `npm run build` to `tsc`, are notes rather than reasons to review. A hook that runs a file from the repository, or downloads anything, is reported as before.
+- Fixed: Copying the environment for a subprocess, as `os.environ.copy()` does, is not reported; serializing all of it still is.
+- Fixed: Findings in tests and example code, such as a scanner's attack strings kept as test data or a demo's session secret, are listed as notes and do not change the verdict, and an oversized test fixture does not make a scan incomplete.
+- Fixed: Example URLs such as `scheme://[user:passwd@]host`, placeholder values such as `API_KEY_UNUSED`, base64 images and fonts, and passwords in Docker Compose files are not reasons to review.
+
 ## v1.0.2 (2026-11-02)
 
 - Fixed: Projects without Git that hold no code, only files such as a Dockerfile, are counted in an upload's facts, with their tools, so the official score counts them as the local estimate does.
