@@ -18,10 +18,17 @@ const (
 	EvidenceBranch   = "evidence.branch"
 )
 
+// maxBranchEvidence bounds the complexity one function counts as evidence.
+// Nesting makes complexity grow with its square, so a hostile file could ask
+// for millions of findings; past this, a function shows no more, and it is
+// already reported as too complex.
+const maxBranchEvidence = 100
+
 // EvidenceOf returns the findings that record a function at line with the
 // given cognitive complexity: one for the function and one per point of
-// complexity.
+// complexity, up to maxBranchEvidence.
 func EvidenceOf(path string, line, complexity int) []Finding {
+	complexity = min(max(complexity, 0), maxBranchEvidence)
 	out := make([]Finding, 0, 1+complexity)
 	out = append(out, Finding{Rule: EvidenceFunction, Path: path, Line: line, Positive: true})
 	for range complexity {
