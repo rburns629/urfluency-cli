@@ -99,6 +99,10 @@ jobs:
         os: [macos-15, macos-15-intel, ubuntu-24.04, ubuntu-24.04-arm]
     runs-on: ${{ matrix.os }}
     timeout-minutes: 30
+    # The engine environment holds ENGINE_READ_TOKEN, which reads the private
+    # engine the official build includes. It allows v* tags only and needs no
+    # approval; publishing to Homebrew, in the release environment, does.
+    environment: engine
     steps:
       - name: Check out repository
         uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7.0.1
@@ -112,7 +116,21 @@ jobs:
       # on a slow release runner they fail on noise, not on a regression.
       - name: Test
         run: go test -short -count=1 ./...
+      - name: Check out the private engine
+        uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7.0.1
+        with:
+          repository: rburns629/urfluency-engine
+          path: engine
+          token: ${{ secrets.ENGINE_READ_TOKEN }}
+          persist-credentials: false
+      # The workspace builds the engine against this tag's source, whatever
+      # CLI version the engine's own go.mod names.
+      - name: Link the engine to this source
+        run: go work init . ./engine
       - name: Build archive
+        env:
+          PACKAGE: ./engine/cmd/urfluency
+          EXPECT_ENGINE: official
         run: scripts/build-release.sh "${GITHUB_REF_NAME#v}" dist
       - name: Upload archive
         uses: actions/upload-artifact@cf430e030ddbb5b0abf93d22962f4752f3646cd9 # v7.0.2

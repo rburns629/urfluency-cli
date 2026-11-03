@@ -16,3 +16,7 @@ urfluency-report.json
 .DS_Store
 .vscode/
 .idea/
+# The private engine and the workspace the release links it with.
+/engine/
+/go.work
+/go.work.sum
