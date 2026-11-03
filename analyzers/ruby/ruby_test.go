@@ -48,10 +48,14 @@ func TestRules(t *testing.T) {
       def #{name}; end
     RUBY
     binding.eval(params[:code])
+    self.class.class_eval(params[:body])
   end
 end
 `,
-			want: []string{"ruby.eval-built:3", "ruby.eval-built:4", "ruby.eval-built:5", "ruby.eval-built:8"},
+			// class_eval with an interpolated heredoc is how libraries define
+			// methods from their own configuration (line 5); only request
+			// input makes it code injection.
+			want: []string{"ruby.eval-built:3", "ruby.eval-built:4", "ruby.eval-built:8", "ruby.eval-built:9"},
 		},
 		{
 			name: "eval of literals, constants, blocks, and single-quoted heredocs",
@@ -597,5 +601,32 @@ func TestIsTestPath(t *testing.T) {
 		if got := analysis.IsTestPath(p); got != want {
 			t.Errorf("IsTestPath(%s) = %v, want %v", p, got, want)
 		}
+	}
+}
+
+// Tests, Redis keys, and verification an operator switches off are not
+// findings; the same calls in app code on request input are.
+func TestPrecisionCases(t *testing.T) {
+	src := `class Feed
+  def call
+    redis.exists?("delete_upon_arrival:#{@account.id}:#{uri}")
+    Status.connection.execute("SELECT MAX(id) FROM (#{subquery.to_sql}) t")
+    User.exists?("name = '#{params[:name]}'")
+    opts[:verify_mode] = OpenSSL::SSL::VERIFY_NONE if Devise.ldap_tls_no_verify
+    http.verify_mode = OpenSSL::SSL::VERIFY_NONE
+  end
+end
+`
+	got := findings(t, "app/lib/feed.rb", src)
+	want := []string{"ruby.sql-string-built:5", "ruby.ssl-verify-none:7"}
+	if !reflect.DeepEqual(got, want) {
+		t.Errorf("got %v, want %v", got, want)
+	}
+	spec := "Marshal.load(body)\nUser.where(\"name = '#{n}'\")\n"
+	if got := findings(t, "spec/models/user_spec.rb", spec); len(got) != 0 {
+		t.Errorf("spec: got %v, want none", got)
+	}
+	if got := findings(t, "lib/tasks/release.rake", "task :release do\n  system(\"git tag v#{version}\")\nend\n"); len(got) != 0 {
+		t.Errorf("rake task: got %v, want none", got)
 	}
 }

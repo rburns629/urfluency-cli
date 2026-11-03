@@ -137,7 +137,7 @@ class Player : MonoBehaviour {
 			name: "blocking on tasks",
 			path: "Svc/Sync.cs",
 			src: `class Sync {
-    void Run() {
+    async Task Run() {
         var a = client.GetStringAsync(url).Result;
         client.SendAsync(req).Wait();
         var b = LoadAsync().GetAwaiter().GetResult();
@@ -152,6 +152,34 @@ class Player : MonoBehaviour {
 `,
 			want: []string{"csharp.blocking-on-task:3", "csharp.blocking-on-task:4", "csharp.blocking-on-task:5",
 				"csharp.blocking-on-task:6", "csharp.blocking-on-task:7"},
+		},
+		{
+			name: "blocking where it does harm: async code and controllers, not sync wrappers",
+			path: "Web/Orders.cs",
+			src: `class OrdersController : Controller {
+    public IActionResult Index() { return View(LoadAsync().Result); }
+}
+class AppDbContext : DbContext {
+    public override int SaveChanges() { return SaveChangesAsync().GetAwaiter().GetResult(); }
+    void Handle() { Task.Run(async () => { var x = GetAsync().Result; }); }
+    async Task Sync(Task task) {
+#pragma warning disable CA1849 // because this is synchronous execution we need to block
+        task.GetAwaiter().GetResult();
+#pragma warning restore CA1849
+    }
+}
+`,
+			want: []string{"csharp.blocking-on-task:2", "csharp.blocking-on-task:6"},
+		},
+		{
+			name: "tests and benchmarks block, serialize, and use async void freely",
+			path: "test/Polly.Specs/RetrySpecs.cs",
+			src: `class RetrySpecs {
+    async void Fires() { var r = RunAsync().Result; }
+    void Old() { new BinaryFormatter(); }
+}
+`,
+			want: []string{},
 		},
 		{
 			name: "empty catch of everything or Exception",

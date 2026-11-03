@@ -180,3 +180,25 @@ func TestCdWhoseFailureIsHandled(t *testing.T) {
 		t.Errorf("a bare cd was not reported: %v", got)
 	}
 }
+
+// zsh does not split unquoted expansions into words, so zsh code, by
+// extension, shebang, or zsh-only syntax, is not reported for them; a bash
+// script is.
+func TestZshExpansionsAreNotSplit(t *testing.T) {
+	cmd := "printf \"%s\" $*\ncp $src $dst\n"
+	for path, src := range map[string]string{
+		"plugins/git/git.plugin.zsh": cmd,
+		"tools/run.sh":               "#!/usr/bin/env zsh\n" + cmd,
+		"oh-my-zsh.sh":               "setopt extendedglob\n" + cmd,
+	} {
+		for _, f := range findings(t, path, src, false) {
+			if strings.HasPrefix(f, "shell.unquoted-expansion") {
+				t.Errorf("%s: got %s", path, f)
+			}
+		}
+	}
+	bash := findings(t, "tools/run.sh", "#!/bin/bash\nset -e\n"+cmd, false)
+	if !slices.Contains(bash, "shell.unquoted-expansion:3") {
+		t.Errorf("bash: got %v, want the unquoted expansion", bash)
+	}
+}

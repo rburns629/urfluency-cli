@@ -90,6 +90,7 @@ func (Analyzer) Analyze(ctx context.Context, files []analysis.File) ([]analysis.
 			continue
 		}
 		c := checker{tree: tree, path: f.Path, isTest: analysis.IsTestPath(f.Path)}
+		c.readAssignments(tree.Root())
 		parsing.Walk(tree.Root(), c.visit)
 		parsing.Walk(tree.Root(), c.visitIdioms)
 		if !c.isTest {
@@ -191,10 +192,55 @@ func (Analyzer) Frameworks(f analysis.File) []string {
 }
 
 type checker struct {
-	tree     *parsing.Tree
-	path     string
-	isTest   bool
-	findings []analysis.Finding
+	tree   *parsing.Tree
+	path   string
+	isTest bool
+	// fromRequest and escaped are the variables the file assigns from
+	// request input, and from a shell-escaped expression.
+	fromRequest, escaped map[string]bool
+	findings             []analysis.Finding
+}
+
+// readAssignments records which variables hold request input, such as
+// $page = $_GET['page'], and which hold shell-escaped text, such as
+// $cmd = escapeshellcmd($bin) . $args.
+func (c *checker) readAssignments(root *ts.Node) {
+	c.fromRequest, c.escaped = map[string]bool{}, map[string]bool{}
+	parsing.Walk(root, func(n *ts.Node) bool {
+		if n.Kind() != "assignment_expression" {
+			return true
+		}
+		left, right := n.ChildByFieldName("left"), n.ChildByFieldName("right")
+		if left == nil || right == nil || left.Kind() != "variable_name" {
+			return true
+		}
+		name := c.variableName(left)
+		if c.usesRequestInput(right) {
+			c.fromRequest[name] = true
+		}
+		parsing.Walk(right, func(m *ts.Node) bool {
+			if m.Kind() == "function_call_expression" {
+				if _, fn := c.callee(m); shellEscapes[fn] {
+					c.escaped[name] = true
+				}
+			}
+			return !c.escaped[name]
+		})
+		return true
+	})
+}
+
+// requestDerived reports whether an expression reads request input, or a
+// variable the file assigns from it.
+func (c *checker) requestDerived(n *ts.Node) bool {
+	found := c.usesRequestInput(n)
+	parsing.Walk(n, func(m *ts.Node) bool {
+		if m.Kind() == "variable_name" && c.fromRequest[c.variableName(m)] {
+			found = true
+		}
+		return !found
+	})
+	return found
 }
 
 func (c *checker) report(rule string, n *ts.Node) {

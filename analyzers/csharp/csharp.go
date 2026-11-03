@@ -95,7 +95,8 @@ func (Analyzer) Analyze(ctx context.Context, files []analysis.File) ([]analysis.
 		if err != nil {
 			continue
 		}
-		c := checker{tree: tree, path: f.Path, frameworks: frameworksOf(tree)}
+		c := checker{tree: tree, path: f.Path, frameworks: frameworksOf(tree),
+			isTest: analysis.IsTestPath(f.Path) || parsing.InDir(f.Path, "bench", "benchmarks", "Benchmarks")}
 		parsing.Walk(tree.Root(), c.visit)
 		parsing.Walk(tree.Root(), c.visitIdioms)
 		if !analysis.IsTestPath(f.Path) {
@@ -116,7 +117,10 @@ type checker struct {
 	tree       *parsing.Tree
 	path       string
 	frameworks map[string]bool
-	findings   []analysis.Finding
+	// isTest marks tests and benchmarks, where blocking, async void, and
+	// insecure serializers exercise code rather than serve users.
+	isTest   bool
+	findings []analysis.Finding
 }
 
 // text returns a node's source text, or "" for a missing node.
@@ -139,12 +143,14 @@ func (c *checker) visit(n *ts.Node) bool {
 		c.checkInvocation(n)
 	case "member_access_expression":
 		if name := n.ChildByFieldName("name"); name != nil && c.tree.Text(name) == "Result" && c.isTask(n.ChildByFieldName("expression")) {
-			c.report("csharp.blocking-on-task", n)
+			c.reportBlocking(n)
 		}
 	case "assignment_expression":
 		c.checkAssignment(n)
 	case "method_declaration", "local_function_statement":
-		c.checkAsyncVoid(n)
+		if !c.isTest {
+			c.checkAsyncVoid(n)
+		}
 	case "catch_clause":
 		c.checkCatch(n)
 	case "identifier":
@@ -215,7 +221,7 @@ var insecureSerializers = map[string]bool{
 func (c *checker) checkCreation(n *ts.Node) {
 	typeName := c.lastName(n.ChildByFieldName("type"))
 	switch {
-	case insecureSerializers[typeName]:
+	case insecureSerializers[typeName] && !c.isTest:
 		c.report("csharp.binary-formatter", n)
 	case sqlCommandTypes[typeName] && c.builtString(firstArgument(n)):
 		c.report("csharp.sql-string-built", n)
@@ -230,18 +236,88 @@ func (c *checker) checkInvocation(n *ts.Node) {
 	case name == "GetResult":
 		if fn := n.ChildByFieldName("function"); fn != nil && fn.Kind() == "member_access_expression" {
 			if recv := fn.ChildByFieldName("expression"); recv != nil && recv.Kind() == "invocation_expression" && c.memberName(recv) == "GetAwaiter" {
-				c.report("csharp.blocking-on-task", n)
+				c.reportBlocking(n)
 			}
 		}
 	case name == "Wait":
 		if fn := n.ChildByFieldName("function"); fn != nil && fn.Kind() == "member_access_expression" && c.isTask(fn.ChildByFieldName("expression")) {
-			c.report("csharp.blocking-on-task", n)
+			c.reportBlocking(n)
 		}
 	case name == "WaitAll" || name == "WaitAny":
 		if fn := n.ChildByFieldName("function"); fn != nil && c.tree.Text(fn) == "Task."+name {
-			c.report("csharp.blocking-on-task", n)
+			c.reportBlocking(n)
 		}
 	}
+}
+
+// reportBlocking reports blocking on a task where it does harm: in async
+// code, which should await instead and can deadlock or starve the thread
+// pool, and in an ASP.NET controller, whose request threads it ties up. A
+// synchronous method that wraps an async one, such as an override of EF's
+// SaveChanges or a library's sync API, has no better choice, and startup
+// code and tests block harmlessly.
+func (c *checker) reportBlocking(n *ts.Node) {
+	if c.isTest || c.suppressedBlocking(n) {
+		return
+	}
+	p := c.tree.Parent(n)
+	for range 200 {
+		if p == nil {
+			return
+		}
+		switch p.Kind() {
+		case "lambda_expression", "anonymous_method_expression", "local_function_statement":
+			if c.hasModifier(p, "async") {
+				c.report("csharp.blocking-on-task", n)
+			}
+			return
+		case "method_declaration":
+			if c.hasModifier(p, "async") || c.inController(p) {
+				c.report("csharp.blocking-on-task", n)
+			}
+			return
+		}
+		p = c.tree.Parent(p)
+	}
+}
+
+// blockingSuppressions are the .NET analyzer rules for blocking on tasks; a
+// #pragma warning disable of one just above the call is a reviewed decision.
+var blockingSuppressions = []string{"CA1849", "CA2012", "VSTHRD002", "VSTHRD103"}
+
+func (c *checker) suppressedBlocking(n *ts.Node) bool {
+	lines := strings.Split(string(c.tree.Source), "\n")
+	row := int(n.StartPosition().Row)
+	for i := max(0, row-4); i < row && i < len(lines); i++ {
+		if strings.Contains(lines[i], "#pragma warning disable") {
+			for _, id := range blockingSuppressions {
+				if strings.Contains(lines[i], id) {
+					return true
+				}
+			}
+		}
+	}
+	return false
+}
+
+// inController reports whether a method belongs to an ASP.NET controller:
+// a class named ...Controller or deriving from Controller or ControllerBase.
+func (c *checker) inController(method *ts.Node) bool {
+	for p := c.tree.Parent(method); p != nil; p = c.tree.Parent(p) {
+		if p.Kind() != "class_declaration" {
+			continue
+		}
+		if strings.HasSuffix(c.text(p.ChildByFieldName("name")), "Controller") {
+			return true
+		}
+		for _, ch := range parsing.NamedChildren(p) {
+			if ch.Kind() == "base_list" && strings.Contains(c.text(ch), "Controller") {
+				return true
+			}
+		}
+		return false
+	}
+	return false
 }
 
 // isTask reports whether an expression is visibly a task: a call to a method

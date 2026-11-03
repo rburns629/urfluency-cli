@@ -7,7 +7,8 @@ import (
 
 // testDirs hold tests by convention in every supported language; spec is
 // RSpec's and JavaScript's.
-var testDirs = map[string]bool{"tests": true, "test": true, "__tests__": true, "Tests": true, "androidTest": true, "testFixtures": true, "spec": true}
+var testDirs = map[string]bool{"tests": true, "test": true, "__tests__": true, "Tests": true, "androidTest": true, "testFixtures": true, "spec": true,
+	"UnitTests": true, "IntegrationTests": true, "FunctionalTests": true}
 
 // IsTestDataDir reports folders of sample inputs for tests: Go's testdata
 // and the fixtures folders of other languages. Their lockfiles and Dockerfiles

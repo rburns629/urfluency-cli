@@ -63,18 +63,27 @@ func (c *checker) visit(n *ts.Node) bool {
 	case "function_call_expression", "member_call_expression", "nullsafe_member_call_expression", "scoped_call_expression":
 		c.checkCall(n)
 	case "shell_command_expression":
+		if c.isTest {
+			break
+		}
 		for _, part := range parsing.NamedChildren(n) {
-			if part.Kind() != "string_content" && part.Kind() != "escape_sequence" {
+			if part.Kind() != "string_content" && part.Kind() != "escape_sequence" && c.requestDerived(part) {
 				c.report("php.command-built", n)
 				break
 			}
 		}
 	case "include_expression", "include_once_expression", "require_expression", "require_once_expression":
-		if p := n.NamedChild(0); p != nil && c.tainted(p) {
+		// A path from the request can name any file, or with
+		// allow_url_include any URL; one built from the program's own
+		// directories and names, as autoloaders and front controllers do,
+		// cannot.
+		if p := n.NamedChild(0); p != nil && !c.isTest && c.requestDerived(p) {
 			c.report("php.include-variable-path", n)
 		}
 	case "array_element_initializer":
-		c.checkTLSOption(n)
+		if !c.isTest {
+			c.checkTLSOption(n)
+		}
 	case "echo_statement", "print_intrinsic":
 		c.checkEcho(parsing.NamedChildren(n), n)
 	case "expression_statement":
@@ -100,6 +109,9 @@ func (c *checker) visit(n *ts.Node) bool {
 }
 
 func (c *checker) checkCall(call *ts.Node) {
+	if c.isTest { // tests build queries and commands from fixtures and talk to local TLS servers
+		return
+	}
 	receiver, name := c.callee(call)
 	args := arguments(call)
 	if name == "withoutverifying" { // Laravel's Http::withoutVerifying()
@@ -133,7 +145,11 @@ func (c *checker) checkFunction(call *ts.Node, name string, args []*ts.Node) {
 		}
 	case shellFunctions[name]:
 		// proc_open with an array runs the program without a shell.
-		if len(args) > 0 && args[0].Kind() != "array_creation_expression" && c.tainted(args[0]) {
+		// A command run from the program's own configuration and arguments,
+		// as a CLI tool's are, is not injection; request input reaching a
+		// shell is.
+		if len(args) > 0 && args[0].Kind() != "array_creation_expression" && c.tainted(args[0]) && c.requestDerived(args[0]) &&
+			!(args[0].Kind() == "variable_name" && c.escaped[c.variableName(args[0])]) {
 			c.report("php.command-built", call)
 		}
 	case sqlFunctions[name]:
@@ -141,11 +157,13 @@ func (c *checker) checkFunction(call *ts.Node, name string, args []*ts.Node) {
 			c.report("php.sql-string-built", call)
 		}
 	case name == "md5" || name == "sha1":
-		if len(args) > 0 && c.mentionsPassword(args[0]) {
+		if len(args) > 0 && c.mentionsPassword(args[0]) && !c.checksPwnedPasswords() {
 			c.report("php.password-fast-hash", call)
 		}
 	case name == "hash":
-		if len(args) > 1 && c.mentionsPassword(args[1]) {
+		// HTTP Digest authentication hashes username:realm:password with MD5
+		// by protocol.
+		if len(args) > 1 && c.mentionsPassword(args[1]) && !strings.Contains(c.tree.Text(args[1]), "realm") {
 			c.report("php.password-fast-hash", call)
 		}
 	case name == "curl_setopt":
@@ -420,8 +438,31 @@ func (c *checker) interpolated(n *ts.Node) bool {
 			parts = parsing.NamedChildren(body)
 		}
 	}
+	before := ""
 	for _, part := range parts {
-		if part.Kind() != "string_content" && part.Kind() != "escape_sequence" && c.sqlValue(part) {
+		if part.Kind() == "string_content" || part.Kind() == "escape_sequence" {
+			before += c.tree.Text(part)
+			continue
+		}
+		if c.sqlValue(part) && valuePosition(before) {
+			return true
+		}
+		before = ""
+	}
+	return false
+}
+
+// valuePosition reports whether SQL text ending here expects a value next:
+// inside quotes, after a comparison or LIKE, or in a list such as VALUES (
+// or IN (. An expression spliced elsewhere, such as "$hour AS played_hour"
+// or "CASE id $cases END", builds the statement, not a value in it.
+func valuePosition(before string) bool {
+	if strings.Count(strings.ReplaceAll(before, "''", ""), "'")%2 == 1 {
+		return true
+	}
+	t := strings.ToUpper(strings.TrimRight(before, " \t\n"))
+	for _, op := range []string{"=", "<", ">", " LIKE", "(", ","} {
+		if strings.HasSuffix(t, op) {
 			return true
 		}
 	}
@@ -462,7 +503,20 @@ func (c *checker) sqlValue(n *ts.Node) bool {
 
 func structuralName(name string) bool {
 	name = strings.ToLower(strings.TrimPrefix(name, "$"))
-	return strings.Contains(name, "table") || strings.Contains(name, "prefix") || strings.Contains(name, "placeholder")
+	for _, s := range []string{"table", "prefix", "placeholder", "alias", "column", "operator", "direction"} {
+		if strings.Contains(name, s) {
+			return true
+		}
+	}
+	return false
+}
+
+// checksPwnedPasswords reports a file that queries Have I Been Pwned, whose
+// range API takes the first five characters of a password's SHA-1: the
+// hash is a lookup key there, not how the password is stored.
+func (c *checker) checksPwnedPasswords() bool {
+	src := strings.ToLower(string(c.tree.Source))
+	return strings.Contains(src, "pwnedpasswords") || strings.Contains(src, "haveibeenpwned")
 }
 
 // mentionsPassword reports whether an expression reads a variable, property,

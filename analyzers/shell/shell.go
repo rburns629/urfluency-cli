@@ -67,7 +67,7 @@ func (Analyzer) Analyze(ctx context.Context, files []analysis.File) ([]analysis.
 		if err != nil {
 			continue
 		}
-		c := checker{tree: tree, path: f.Path, errexit: hasErrexit(tree)}
+		c := checker{tree: tree, path: f.Path, errexit: hasErrexit(tree), zsh: isZsh(f.Path, f.Content)}
 		if bytes.HasPrefix(f.Content, []byte("#!")) && !c.errexit && !analysis.IsTestPath(f.Path) {
 			c.findings = append(c.findings, analysis.Finding{Rule: "shell.missing-errexit", Path: f.Path, Line: 1})
 		}
@@ -91,7 +91,24 @@ type checker struct {
 	tree     *parsing.Tree
 	path     string
 	errexit  bool // the script runs with set -e
+	zsh      bool // zsh code, which does not split unquoted expansions
 	findings []analysis.Finding
+}
+
+// zshSyntax matches what only zsh code uses: option, completion, and style
+// builtins, emulate, and parameter expansion flags such as ${(j:,:)list}.
+var zshSyntax = regexp.MustCompile(`(?m)^\s*(setopt|unsetopt|zstyle|compdef|zle\s|emulate\s+-L\s+zsh|autoload\s+-U)|\$\{\([a-zA-Z@:,]+\)`)
+
+// isZsh reports zsh code: a .zsh file, a zsh shebang, or zsh-only syntax in
+// a file zsh sources, such as oh-my-zsh.sh.
+func isZsh(path string, content []byte) bool {
+	if strings.HasSuffix(path, ".zsh") || strings.HasSuffix(path, ".zsh-theme") {
+		return true
+	}
+	if first, _, _ := bytes.Cut(content, []byte("\n")); bytes.HasPrefix(first, []byte("#!")) {
+		return bytes.Contains(first, []byte("zsh"))
+	}
+	return zshSyntax.Match(content)
 }
 
 func (c *checker) report(rule string, n *ts.Node) {
@@ -131,7 +148,7 @@ func (c *checker) checkCommand(n *ts.Node) {
 	for _, a := range args {
 		unquoted = unquoted || c.isUnquotedExpansion(a)
 	}
-	if unquoted && name != "" {
+	if unquoted && name != "" && !c.zsh {
 		c.report("shell.unquoted-expansion", n)
 	}
 	switch name {

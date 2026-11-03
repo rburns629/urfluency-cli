@@ -268,3 +268,19 @@ func TestRegistered(t *testing.T) {
 		t.Errorf("ForPath(.kt) = %v", a)
 	}
 }
+
+// Tests launch on GlobalScope and benchmarks block to measure; neither is
+// production code.
+func TestCoroutineRulesSkipTestsAndBenchmarks(t *testing.T) {
+	src := "import kotlinx.coroutines.*\nfun f() {\n    GlobalScope.launch { }\n    runBlocking { }\n}\n"
+	if got := findings(t, "src/main/kotlin/App.kt", src); len(got) != 2 {
+		t.Errorf("production: got %v, want both", got)
+	}
+	for _, p := range []string{"src/test/kotlin/AppTest.kt", "benchmarks/src/jmh/kotlin/Bench.kt"} {
+		for _, f := range findings(t, p, src) {
+			if f == "kotlin.global-scope:3" || f == "kotlin.run-blocking-in-production:4" {
+				t.Errorf("%s: got %s", p, f)
+			}
+		}
+	}
+}

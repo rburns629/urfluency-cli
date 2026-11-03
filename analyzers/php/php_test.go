@@ -99,18 +99,22 @@ $json = json_decode($_POST['data'], true);
 			want: []string{"php.unsafe-deserialization:2", "php.unsafe-deserialization:3"},
 		},
 		{
-			name: "shell commands built from variables",
+			name: "shell commands built from request input",
 			path: "src/a.php",
 			src: `<?php
+$file = $_POST['file']; $dir = $_GET['dir']; $cmd = $_REQUEST['cmd']; $name = $_FILES['f']['name']; $pattern = $_GET['q'];
 exec("convert " . $file . " out.png");
 $out = shell_exec("ls $dir");
 system($cmd);
 passthru("tar czf " . basename($name));
 $p = popen("grep {$pattern} log.txt", "r");
 $list = ` + "`ls -la $dir`" + `;
+exec("ping -c 1 " . $_GET['host']);
+system($editor . ' ' . $file2);
+$tree = ` + "`ls $root`" + `;
 `,
-			want: []string{"php.command-built:2", "php.command-built:3", "php.command-built:4", "php.command-built:5",
-				"php.command-built:6", "php.command-built:7"},
+			want: []string{"php.command-built:3", "php.command-built:4", "php.command-built:5", "php.command-built:6",
+				"php.command-built:7", "php.command-built:8", "php.command-built:9"},
 		},
 		{
 			name: "shell commands escaped or constant",
@@ -127,17 +131,19 @@ $db->exec("VACUUM");
 			want: []string{},
 		},
 		{
-			name: "include with a variable path",
+			name: "include with a path from the request",
 			path: "src/a.php",
 			src: `<?php
 include $_GET['page'] . '.php';
-require_once __DIR__ . "/views/$view.php";
+$section = $_REQUEST['section'];
+require_once __DIR__ . "/views/$section.php";
 include($path);
+require $targetDir . '/autoload_psr4.php';
 require __DIR__ . '/../vendor/autoload.php';
 include_once 'header.php';
 require dirname(__FILE__) . '/config.php';
 `,
-			want: []string{"php.include-variable-path:2", "php.include-variable-path:3", "php.include-variable-path:4"},
+			want: []string{"php.include-variable-path:2", "php.include-variable-path:4"},
 		},
 		{
 			name: "extract on request input",
@@ -599,4 +605,31 @@ func complexityOf(t *testing.T, src string) int {
 		t.Fatalf("got %d functions, want 1", len(fns))
 	}
 	return fns[0].Complexity
+}
+
+// Escaped commands, identifier interpolation, Have I Been Pwned lookups, and
+// tests are not findings; the same code with values or request input is.
+func TestPrecisionCases(t *testing.T) {
+	src := `<?php
+$sendmail = trim(escapeshellcmd($this->Sendmail) . $args);
+popen($sendmail, 'w');
+popen($cmd, 'w');
+DB::raw("(COALESCE($ratingsAlias.rating, 0)) as rating");
+DB::raw("CASE id $cases END");
+DB::select("SELECT $hour AS played_hour FROM plays");
+mysqli_query($conn, "SELECT * FROM students WHERE studentId='$studentId'");
+$h = hash('md5', $username . ':' . $realm . ':' . $password);
+$q->whereRaw("($columns) $operator ($placeholders)", $values);
+DB::select("SELECT * FROM users WHERE name = '$name'");
+$hash = sha1($password); // range query to api.pwnedpasswords.com
+`
+	got := findings(t, "src/a.php", src)
+	want := []string{"php.sql-string-built:11", "php.sql-string-built:8"}
+	if !reflect.DeepEqual(got, want) {
+		t.Errorf("got %v, want %v", got, want)
+	}
+	tls := "<?php\ncurl_setopt($ch, CURLOPT_SSL_VERIFYPEER, false);\nDB::select(\"SELECT * FROM t WHERE id = $id\");\n"
+	if got := findings(t, "tests/Unit/HttpTest.php", tls); len(got) != 0 {
+		t.Errorf("tests: got %v, want none", got)
+	}
 }

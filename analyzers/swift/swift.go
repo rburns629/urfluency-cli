@@ -117,7 +117,8 @@ func (c *checker) visit(n *ts.Node) bool {
 			}
 		}
 	case "call_expression":
-		if !c.isTest && c.insecureURL(n) {
+		// Documentation catalogs and examples show placeholder URLs.
+		if !c.isTest && !strings.Contains(c.path, ".docc/") && !parsing.InDir(c.path, "Examples", "examples", "Example") && c.insecureURL(n) {
 			c.report("swift.http-url-literal", n)
 		}
 	case "equality_expression", "infix_expression", "comparison_expression":
