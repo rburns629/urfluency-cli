@@ -9,7 +9,9 @@ sums up the release in one line. Each change is a bullet that starts with
 `New:`, `Improved:`, `Fixed:`, or `Security:`, written for people who use the
 CLI rather than for people who work on it.
 
-## v1.3.0 (unreleased)
+## v1.3.0 (2026-11-03)
+
+Uploads help tune the rules: they count dismissed findings by rule, never by finding.
 
 - Improved: Uploads say under which rules you dismissed findings, as a count per rule id, so urFluency can see which rules people judge wrong and tune them. They still never say which findings: no file, line, or code. `upload --dry-run` shows exactly what is sent.
 
