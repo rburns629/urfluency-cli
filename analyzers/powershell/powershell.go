@@ -4,6 +4,7 @@ package powershell
 
 import (
 	"context"
+	"strconv"
 	"strings"
 
 	ts "github.com/tree-sitter/go-tree-sitter"
@@ -55,7 +56,7 @@ func (Analyzer) Analyze(ctx context.Context, files []analysis.File) ([]analysis.
 		if err != nil {
 			continue
 		}
-		c := checker{tree: tree, path: f.Path}
+		c := checker{tree: tree, path: f.Path, arrays: map[string]bool{}, grown: map[string]bool{}}
 		parsing.Walk(tree.Root(), c.visit)
 		parsing.Walk(tree.Root(), c.visitIdioms)
 		for _, fn := range parsing.Cognitive(tree, Complexity) {
@@ -76,6 +77,9 @@ type checker struct {
 	tree     *parsing.Tree
 	path     string
 	findings []analysis.Finding
+	// arrays are the variables set to @(), keyed by function and name, and
+	// grown are those already reported as grown in a loop.
+	arrays, grown map[string]bool
 }
 
 func (c *checker) report(rule string, n *ts.Node) {
@@ -107,6 +111,7 @@ func (c *checker) visit(n *ts.Node) bool {
 			break
 		}
 		lt := strings.ToLower(c.tree.Text(left))
+		c.checkArrayGrowth(n, lt)
 		switch {
 		case strings.HasPrefix(lt, "$global:") && !analysis.IsTestPath(c.path):
 			c.report("powershell.global-variable", n)
@@ -121,6 +126,57 @@ func (c *checker) visit(n *ts.Node) bool {
 		}
 	}
 	return true
+}
+
+// checkArrayGrowth flags $list += $item in a loop on a variable set to @():
+// arrays have a fixed size, so each += copies the whole array, and the loop
+// takes time proportional to the square of the item count.
+func (c *checker) checkArrayGrowth(n *ts.Node, name string) {
+	op := n.ChildByFieldName("operator")
+	if op == nil {
+		for _, ch := range parsing.NamedChildren(n) {
+			if ch.Kind() == "assignement_operator" {
+				op = ch
+			}
+		}
+	}
+	value := n.ChildByFieldName("value")
+	if op == nil || value == nil || !strings.HasPrefix(name, "$") || strings.ContainsAny(name, ".[") {
+		return
+	}
+	fn, inLoop := c.scope(n)
+	key := strings.Join([]string{fn, name}, " ")
+	switch c.tree.Text(op) {
+	case "=":
+		if strings.ReplaceAll(c.tree.Text(value), " ", "") == "@()" {
+			c.arrays[key] = true
+		}
+	case "+=":
+		if c.arrays[key] && inLoop && !c.grown[key] && !analysis.IsTestPath(c.path) {
+			c.grown[key] = true
+			c.report("powershell.array-append-in-loop", n)
+		}
+	}
+}
+
+// scope returns where an assignment is: the start of its enclosing function
+// ("" at script level) and whether a loop or a ForEach-Object block in that
+// function encloses it.
+func (c *checker) scope(n *ts.Node) (string, bool) {
+	inLoop := false
+	for p := c.tree.Parent(n); p != nil; p = c.tree.Parent(p) {
+		switch p.Kind() {
+		case "foreach_statement", "for_statement", "while_statement", "do_statement":
+			inLoop = true
+		case "command":
+			// Get-Item * | ForEach-Object { $list += $_ }
+			name := strings.ToLower(c.commandName(p))
+			inLoop = inLoop || name == "foreach-object" || name == "%" || name == "foreach"
+		case "function_statement":
+			return strconv.Itoa(int(p.StartByte())), inLoop
+		}
+	}
+	return "", inLoop
 }
 
 func (c *checker) checkCommand(n *ts.Node) {

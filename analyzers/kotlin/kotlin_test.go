@@ -117,6 +117,26 @@ val cached = runBlocking { load() }
 			want: []string{"kotlin.sql-string-built:2", "kotlin.sql-string-built:3", "kotlin.sql-string-built:4", "kotlin.sql-string-built:5"},
 		},
 		{
+			name: "printStackTrace in main code",
+			path: "A.kt",
+			src: `fun f() {
+    try { a() } catch (e: Exception) { e.printStackTrace() }
+    try { a() } catch (e: Exception) { e.printStackTrace(System.out) }
+}
+`,
+			want: []string{"kotlin.print-stack-trace:2"},
+		},
+		{
+			name: "printStackTrace and SQL in a test source set",
+			path: "shared/src/jvmTest/kotlin/a/Fixtures.kt",
+			src: `fun f(db: SQLiteDatabase, id: String) {
+    try { a() } catch (e: Exception) { e.printStackTrace() }
+    db.execSQL("DELETE FROM t WHERE id = " + id)
+}
+`,
+			want: []string{},
+		},
+		{
 			name: "SQL with bind parameters, constants, or escaped dollars",
 			path: "A.kt",
 			src: `const val TABLE = "t"
@@ -166,7 +186,7 @@ fun f(db: SQLiteDatabase, em: EntityManager, id: String) {
 
 func TestRulesAreInCatalog(t *testing.T) {
 	ids := []string{"kotlin.not-null-assertion", "kotlin.global-scope", "kotlin.run-blocking-in-production",
-		"kotlin.empty-catch", "kotlin.sql-string-built", "kotlin.command-built", "clean.cognitive-complexity"}
+		"kotlin.empty-catch", "kotlin.print-stack-trace", "kotlin.sql-string-built", "kotlin.command-built", "clean.cognitive-complexity"}
 	for _, id := range ids {
 		r, ok := rules.Lookup(id)
 		if !ok || r.Category == rules.Idiom {

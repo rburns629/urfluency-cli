@@ -45,9 +45,14 @@ func TestKnownFormats(t *testing.T) {
 	want := []string{"sec.api-token:3", "sec.api-token:4", "sec.api-token:5", "sec.api-token:6", "sec.api-token:7",
 		"sec.cloud-credential:2", "sec.private-key:1"}
 	// Known formats apply even in test files: a real token is a leak anywhere.
-	for _, p := range []string{"config/app.yaml", "src/app.test.ts"} {
-		if got := scan(t, p, strings.Join(lines, "\n")); !reflect.DeepEqual(got, want) {
-			t.Errorf("%s: got %v, want %v", p, got, want)
+	// Private keys there are test fixtures, generated for TLS and signing tests.
+	for _, p := range []string{"config/app.yaml", "src/app.test.ts", "spec/client_spec.rb", "shared/src/jvmTest/kotlin/ParserTest.kt"} {
+		w := want
+		if p != "config/app.yaml" {
+			w = want[:len(want)-1]
+		}
+		if got := scan(t, p, strings.Join(lines, "\n")); !reflect.DeepEqual(got, w) {
+			t.Errorf("%s: got %v, want %v", p, got, w)
 		}
 	}
 }
@@ -71,8 +76,10 @@ func TestGenericSecrets(t *testing.T) {
 	if got := scan(t, "app/settings.py", content); !reflect.DeepEqual(got, want) {
 		t.Errorf("got %v, want %v", got, want)
 	}
-	if got := scan(t, "tests/test_db.py", content); len(got) != 0 {
-		t.Errorf("generic checks should skip test files, got %v", got)
+	for _, p := range []string{"tests/test_db.py", "spec/api/clients_spec.rb", "app/src/desktopTest/kotlin/LauncherTest.kt"} {
+		if got := scan(t, p, content); len(got) != 0 {
+			t.Errorf("generic checks should skip test files, got %v in %s", got, p)
+		}
 	}
 }
 

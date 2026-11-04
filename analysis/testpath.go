@@ -46,9 +46,14 @@ func IsTestPath(p string) bool {
 		}
 	}
 	parts := strings.Split(p, "/")
-	for _, dir := range parts[:len(parts)-1] {
+	for i, dir := range parts[:len(parts)-1] {
 		// .NET test projects are folders such as Api.Tests or Api.UnitTests.
 		if testDirs[dir] || strings.HasSuffix(dir, ".Tests") || strings.HasSuffix(dir, ".UnitTests") || strings.HasSuffix(dir, ".IntegrationTests") {
+			return true
+		}
+		// Gradle and Kotlin Multiplatform test source sets are folders such
+		// as src/jvmTest, src/commonTest, or src/androidUnitTest.
+		if i > 0 && parts[i-1] == "src" && len(dir) > len("Test") && strings.HasSuffix(dir, "Test") {
 			return true
 		}
 	}

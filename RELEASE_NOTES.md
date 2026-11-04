@@ -9,6 +9,15 @@ sums up the release in one line. Each change is a bullet that starts with
 `New:`, `Improved:`, `Fixed:`, or `Security:`, written for people who use the
 CLI rather than for people who work on it.
 
+## v1.4.0 (2026-11-03)
+
+More of what a reviewer would catch, found by reading 105 average-quality projects the rules were never tuned on, and fewer findings in test code.
+
+- New: Kotlin: e.printStackTrace() instead of a logger. Shell: curl -k and wget --no-check-certificate to anything but this machine. PowerShell: arrays grown with += in a loop, which copies the whole array each time.
+- Fixed: go.ignored-error reports errors dropped from ioutil.ReadAll and ioutil.ReadFile, and in var blocks, as in var ( id, _ = strconv.Atoi(s) ).
+- Fixed: Gradle and Kotlin Multiplatform test source sets, such as src/jvmTest, src/commonTest, and src/androidUnitTest, count as tests.
+- Fixed: Secret checks skip passwords and URL credentials in every kind of test file, including RSpec's spec folders and Kotlin test source sets, and private keys in tests, which are generated for TLS and signing tests. Known token formats, such as AWS and GitHub tokens, are still reported everywhere. kotlin.sql-string-built skips tests.
+
 ## v1.3.0 (2026-11-03)
 
 Uploads help tune the rules: they count dismissed findings by rule, never by finding.

@@ -355,6 +355,27 @@ func f(b []byte, s string) {
 			want: []string{"go.ignored-error:09", "go.ignored-error:10", "go.ignored-error:11", "go.ignored-error:12"},
 		},
 		{
+			name: "ignored errors from ioutil and in var blocks",
+			path: "a.go",
+			src: `package a
+import (
+	"io"
+	"io/ioutil"
+	"strconv"
+)
+func f(r io.Reader, s string) (int, []byte) {
+	var b []byte
+	b, _ = ioutil.ReadAll(r)
+	var (
+		id, _ = strconv.Atoi(s)
+		ok    = true
+	)
+	_ = ok
+	return id, b
+}`,
+			want: []string{"go.ignored-error:09", "go.ignored-error:11"},
+		},
+		{
 			name: "unparsable file is skipped",
 			path: "a.go",
 			src:  `package a func {`,
