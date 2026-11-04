@@ -167,10 +167,17 @@ Flags:
                       scan overrides it
   --online            Go back to checking dependencies live by default
 `,
-	"login": `Usage: urfluency login
+	"login": `Usage: urfluency login [--no-browser]
 
 Links this CLI to your urfluency.com account in your browser, so you can upload.
-The upload token is saved on this machine; logout deletes it.
+Your browser opens urfluency.com; sign in, enter the code we email you, and
+approve. The login comes straight back to this terminal. The upload token is
+saved on this machine with a key kept in your system keychain, and works only
+with that key; logout deletes both.
+
+  --no-browser        For a machine without a browser, such as over SSH: open
+                      the printed link on any device, then paste the code the
+                      page shows here
 `,
 	"status": `Usage: urfluency status
 
@@ -180,7 +187,8 @@ adds features on the site.
 `,
 	"logout": `Usage: urfluency logout
 
-Deletes the upload token on this machine. Your account and uploads are kept.
+Deletes the upload token and its key on this machine. Your account and uploads
+are kept.
 `,
 	"doctor": `Usage: urfluency doctor
 

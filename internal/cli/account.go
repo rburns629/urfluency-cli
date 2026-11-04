@@ -22,10 +22,9 @@ import (
 )
 
 // Uploading is optional and never part of a scan. `urfluency login` links the
-// CLI to an account with a device flow (RFC 8628): the API issues a short code,
-// the user approves it on the website while signed in, and the CLI receives an
-// upload-only token. `urfluency upload` scans, shows what it will send, and asks
-// before sending.
+// CLI to an account (login.go) and receives an upload-only token bound to a key
+// on this machine (sign.go). `urfluency upload` scans, shows what it will send,
+// and asks before sending.
 
 const defaultAPI = "https://api.urfluency.com"
 
@@ -64,11 +63,15 @@ func sameOrigin(req *http.Request, via []*http.Request) error {
 }
 
 // credentials are the upload token `urfluency login` saved. They stay on this
-// machine, readable only by the user, and are never printed.
+// machine, readable only by the user, and are never printed. KeyStore says
+// where the token's key is: "keychain", or "file" with the key in Key. Logins
+// from before 1.5.0 have neither, and the API refuses them.
 type credentials struct {
-	API     string    `json:"api"`
-	Token   string    `json:"token"`
-	Expires time.Time `json:"expires_at"`
+	API      string    `json:"api"`
+	Token    string    `json:"token"`
+	Expires  time.Time `json:"expires_at"`
+	KeyStore string    `json:"key_store,omitempty"`
+	Key      string    `json:"key,omitempty"`
 }
 
 func credentialsPath() (string, error) {
@@ -159,15 +162,6 @@ func postJSONWith(ctx context.Context, endpoint, token string, headers map[strin
 	return sendJSON(req, token, headers, out)
 }
 
-// getJSON is postJSON for a GET without a body.
-func getJSON(ctx context.Context, endpoint, token string, out any) (int, string, error) {
-	req, err := http.NewRequestWithContext(ctx, http.MethodGet, endpoint, nil)
-	if err != nil {
-		return 0, "", err
-	}
-	return sendJSON(req, token, nil, out)
-}
-
 // sendJSON sends req and decodes its JSON answer, as postJSON describes.
 func sendJSON(req *http.Request, token string, headers map[string]string, out any) (int, string, error) {
 	endpoint := req.URL.String()
@@ -202,94 +196,6 @@ func sendJSON(req *http.Request, token string, headers map[string]string, out an
 	return resp.StatusCode, "", nil
 }
 
-// deviceStart is the API's answer to a device login request.
-type deviceStart struct {
-	DeviceCode              string `json:"device_code"`
-	UserCode                string `json:"user_code"`
-	VerificationURI         string `json:"verification_uri"`
-	VerificationURIComplete string `json:"verification_uri_complete"`
-	ExpiresIn               int    `json:"expires_in"`
-	Interval                int    `json:"interval"`
-}
-
-type deviceToken struct {
-	AccessToken string `json:"access_token"`
-	ExpiresIn   int    `json:"expires_in"`
-}
-
-// pollInterval is the shortest wait between token requests, and slowDownStep
-// what each slow_down answer adds to it (RFC 8628); tests lower both.
-var pollInterval, slowDownStep = 5 * time.Second, 5 * time.Second
-
-func login(ctx context.Context, args []string, stdout io.Writer) error {
-	fs := flag.NewFlagSet("login", flag.ContinueOnError)
-	fs.SetOutput(io.Discard)
-	if err := fs.Parse(args); err != nil || fs.NArg() > 0 {
-		return fmt.Errorf("%w: login takes no arguments", errUsage)
-	}
-	base, err := apiBase()
-	if err != nil {
-		return err
-	}
-	var start deviceStart
-	device := deviceName()
-	status, code, err := postJSON(ctx, base+"/v1/auth/device", "", map[string]string{"client": "urfluency-cli", "version": Version, "device": device}, &start)
-	if err != nil {
-		return fmt.Errorf("start login: %w", err)
-	}
-	if status/100 != 2 {
-		return fmt.Errorf("start login: %s (%d)", code, status)
-	}
-	if start.ExpiresIn <= 0 || start.DeviceCode == "" {
-		return errors.New("start login: the server sent no device code or expiry; try again later")
-	}
-	link := start.VerificationURIComplete
-	if link == "" {
-		link = start.VerificationURI
-	}
-	fmt.Fprintf(stdout, "Open %s\nand approve this code after signing in: %s\n\n", link, start.UserCode)
-	if device != "" {
-		fmt.Fprintf(stdout, "Settings will list this machine as %q; set URFLUENCY_DEVICE_NAME to rename it, or to \"\" to send no name.\n\n", device)
-	}
-	fmt.Fprintln(stdout, "Waiting for approval…")
-
-	interval := max(time.Duration(start.Interval)*time.Second, pollInterval)
-	deadline := time.Now().Add(time.Duration(start.ExpiresIn) * time.Second)
-	for time.Now().Before(deadline) {
-		select {
-		case <-ctx.Done():
-			return ctx.Err()
-		case <-time.After(interval):
-		}
-		var tok deviceToken
-		status, code, err := postJSON(ctx, base+"/v1/auth/device/token", "", map[string]string{"device_code": start.DeviceCode}, &tok)
-		if err != nil {
-			return fmt.Errorf("finish login: %w", err)
-		}
-		switch {
-		case status/100 == 2 && tok.AccessToken != "" && tok.ExpiresIn <= 0:
-			return errors.New("finish login: the server sent a token without an expiry; try again later")
-		case status/100 == 2 && tok.AccessToken != "":
-			c := credentials{API: base, Token: tok.AccessToken, Expires: time.Now().Add(time.Duration(tok.ExpiresIn) * time.Second)}
-			if err := c.save(); err != nil {
-				return fmt.Errorf("save login: %w", err)
-			}
-			fmt.Fprintf(stdout, "Logged in. Uploads are allowed until %s; run urfluency upload when you want to share results.\n", c.Expires.Format("2006-01-02"))
-			return nil
-		case code == "authorization_pending":
-		case code == "slow_down":
-			interval += slowDownStep
-		case code == "access_denied":
-			return errors.New("login was denied on the website")
-		case code == "expired_token":
-			return errors.New("the code expired; run urfluency login again")
-		default:
-			return fmt.Errorf("finish login: %s (%d)", code, status)
-		}
-	}
-	return errors.New("the code expired; run urfluency login again")
-}
-
 func logout(args []string, stdout io.Writer) error {
 	if len(args) > 0 {
 		return fmt.Errorf("%w: logout takes no arguments", errUsage)
@@ -298,11 +204,54 @@ func logout(args []string, stdout io.Writer) error {
 	if err != nil {
 		return err
 	}
+	// An expired login still has a key to delete; loadCredentials reports the
+	// expiry as an error but reads the credentials anyway.
+	if c, _ := loadCredentials(); c.KeyStore == "keychain" {
+		if err := keys.Delete(c.API); err != nil {
+			return fmt.Errorf("delete the login's key from your keychain: %w", err)
+		}
+	}
 	if err := os.Remove(path); err != nil && !errors.Is(err, fs.ErrNotExist) {
 		return err
 	}
-	fmt.Fprintln(stdout, "Logged out. The upload token on this machine was deleted.")
+	fmt.Fprintln(stdout, "Logged out. The upload token and its key on this machine were deleted.")
 	return nil
+}
+
+// signedJSON sends body as JSON (or nothing for a GET) with the credentials'
+// token, signed by its key, and decodes a 2xx answer into out, as postJSON
+// does.
+func signedJSON(ctx context.Context, method, endpoint string, c credentials, body, out any) (int, string, error) {
+	key, err := c.privateKey()
+	if err != nil {
+		return 0, "", err
+	}
+	var data []byte
+	if body != nil {
+		if data, err = json.Marshal(body); err != nil {
+			return 0, "", err
+		}
+	}
+	req, err := http.NewRequestWithContext(ctx, method, endpoint, bytes.NewReader(data))
+	if err != nil {
+		return 0, "", err
+	}
+	if body != nil {
+		req.Header.Set("Content-Type", "application/json")
+	}
+	signRequest(req, data, c.Token, key)
+	return sendJSON(req, "", nil, out)
+}
+
+// loginRefused explains why the API refused a signed request's login.
+func loginRefused(code string) error {
+	switch code {
+	case "cli_update_required":
+		return errors.New("this login is from an older urfluency, which the API no longer accepts; run urfluency login")
+	case "clock_skew":
+		return errors.New("your computer's clock is more than 5 minutes off; correct it and try again")
+	}
+	return errors.New("the API did not accept your login; run urfluency login")
 }
 
 // buildPayload takes only the summary, the combined result, and the facts
@@ -394,6 +343,9 @@ func uploadCmd(ctx context.Context, args []string, stdout, stderr io.Writer) err
 		if creds, err = loadCredentials(); err != nil {
 			return err
 		}
+		if _, err := creds.privateKey(); err != nil {
+			return err
+		}
 	}
 	fmt.Fprintln(stderr, "Scanning again: upload builds its own report and does not reuse an earlier scan.")
 	r, err := buildReport(ctx, sf, path, false, stderr)
@@ -422,13 +374,13 @@ func uploadCmd(ctx context.Context, args []string, stdout, stderr io.Writer) err
 		}
 	}
 	var res uploadResult
-	status, code, err := postJSON(ctx, creds.API+"/v1/metrics", creds.Token, p, &res)
+	status, code, err := signedJSON(ctx, http.MethodPost, creds.API+"/v1/metrics", creds, p, &res)
 	if err != nil {
 		return fmt.Errorf("upload: %w", err)
 	}
 	switch {
 	case status == http.StatusUnauthorized:
-		return errors.New("the API did not accept your login; run urfluency login")
+		return loginRefused(code)
 	case code == "daily_limit":
 		return errors.New("upload: today's upload limit is reached; try again tomorrow (UTC)")
 	case status/100 != 2:
@@ -464,12 +416,16 @@ func status(ctx context.Context, args []string, stdout io.Writer) error {
 	var res struct {
 		Plan string `json:"plan"`
 	}
-	code, _, err := getJSON(ctx, c.API+"/v1/plan", c.Token, &res)
+	if _, err := c.privateKey(); err != nil {
+		fmt.Fprintf(stdout, "Not ready to upload: %v.\n", err)
+		return nil
+	}
+	code, refusal, err := signedJSON(ctx, http.MethodGet, c.API+"/v1/plan", c, nil, &res)
 	switch {
 	case err != nil:
 		fmt.Fprintf(stdout, "Plan: unknown, could not reach %s.\n", c.API)
 	case code == http.StatusUnauthorized:
-		fmt.Fprintln(stdout, "The API no longer accepts this login; run urfluency login.")
+		fmt.Fprintf(stdout, "Not ready to upload: %v.\n", loginRefused(refusal))
 	case code/100 != 2 || planNames[res.Plan] == "":
 		fmt.Fprintf(stdout, "Plan: unknown (%d).\n", code)
 	default:

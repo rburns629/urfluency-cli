@@ -18,6 +18,12 @@ require (
 	github.com/tree-sitter/tree-sitter-ruby v0.23.1
 	github.com/tree-sitter/tree-sitter-rust v0.24.2
 	github.com/tree-sitter/tree-sitter-typescript v0.23.2
+	github.com/zalando/go-keyring v0.2.8
 )
 
-require github.com/mattn/go-pointer v0.0.1 // indirect
+require (
+	github.com/danieljoos/wincred v1.2.3 // indirect
+	github.com/godbus/dbus/v5 v5.2.2 // indirect
+	github.com/mattn/go-pointer v0.0.1 // indirect
+	golang.org/x/sys v0.27.0 // indirect
+)

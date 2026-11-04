@@ -9,6 +9,15 @@ sums up the release in one line. Each change is a bullet that starts with
 `New:`, `Improved:`, `Fixed:`, or `Security:`, written for people who use the
 CLI rather than for people who work on it.
 
+## v1.5.0 (2026-11-04)
+
+A safer login: it can no longer be phished, and a copied token is useless.
+
+- Security: `urfluency login` opens urfluency.com in your browser. You sign in, enter a code we email you, and approve; the login comes straight back to the terminal. Someone who sends you a login link can no longer use your approval. On a machine without a browser, such as over SSH, `urfluency login --no-browser` prints a link to open on any device and asks you to paste the code the page shows.
+- Security: Your upload token is bound to a key made for this login and kept in your system keychain (macOS Keychain, Windows Credential Manager, or the Secret Service on Linux), and every upload is signed with it. A copy of the token alone is useless. Where there is no keychain, the key is kept in credentials.json, readable only by you, and login says so; `URFLUENCY_NO_KEYCHAIN=1` chooses that.
+- Security: Logins from earlier versions stop working when urfluency.com moves to the new login. Update, then run `urfluency login` again; `upload` and `status` tell you if you need to.
+- Improved: `urfluency logout` deletes the login's key along with its token.
+
 ## v1.4.0 (2026-11-03)
 
 More of what a reviewer would catch, found by reading 105 average-quality projects the rules were never tuned on, and fewer findings in test code.
