@@ -167,10 +167,14 @@ func algoliaSearchKey(line string, lines [][]byte, i int) bool {
 
 // match returns the first rule a line violates, or "". Generic checks (URL
 // credentials and password assignments) are skipped in test files, where fixture
-// passwords are expected, and on comment lines, where they are examples. Known
-// token formats are reported everywhere.
+// passwords are expected, and on comment lines, where they are examples. So are
+// private keys in tests, which are generated for TLS and signing tests. Other
+// known token formats are reported everywhere.
 func match(line string, generic, config bool) string {
 	for _, p := range patterns {
+		if p.rule == "sec.private-key" && !generic {
+			continue
+		}
 		// AWS documents sample credentials such as AKIAIOSFODNN7EXAMPLE and
 		// ...EXAMPLEKEY; they are not secrets.
 		if m := p.re.FindString(line); m != "" && !strings.Contains(m, "EXAMPLE") {
@@ -277,7 +281,7 @@ func isConfig(p string) bool {
 
 func isTestPath(p string) bool {
 	base := path.Base(p)
-	return strings.Contains(p, "/test/") || strings.Contains(p, "/tests/") || strings.HasPrefix(p, "test/") ||
+	return analysis.IsTestPath(p) || strings.Contains(p, "/test/") || strings.Contains(p, "/tests/") || strings.HasPrefix(p, "test/") ||
 		strings.HasPrefix(p, "tests/") || strings.Contains(base, "_test.") || strings.Contains(base, ".test.") ||
 		strings.Contains(base, ".spec.") || strings.HasPrefix(base, "test_")
 }

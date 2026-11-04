@@ -21,6 +21,7 @@ func TestIsTestPath(t *testing.T) {
 		"Api.Tests/UserTests.cs": true, "Api/UserService.cs": false, "src/UnitTests/CollectionMapping.cs": true, "src/IntegrationTests/Orders.cs": true, "Tests/AppTests/LoginTests.swift": true,
 		"Sources/App/Login.swift": false, "test/widget_test.dart": true, "lib/user_test.dart": true, "lib/user.dart": false,
 		"src/parser_unittest.cc": true, "src/parser.cc": false, "app/src/androidTest/a/LoginTest.kt": true,
+		"shared/src/commonTest/kotlin/a/Fixtures.kt": true, "app/src/androidUnitTest/a/Fakes.kt": true, "shared/src/commonMain/kotlin/a/Parser.kt": false,
 		"a/b.go": false, "src/testing.ts": false, "contest.py": false, "src/latest/x.ts": false,
 	}
 	for p, want := range tests {

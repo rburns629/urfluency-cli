@@ -81,6 +81,18 @@ eval 'echo hi'
 			want: []string{"shell.eval:2"},
 		},
 		{
+			name: "downloads with certificate checks off, except to this machine",
+			src: `set -e
+curl -sk "https://$DOMAIN/api/v2/users" -o users.json
+curl --insecure -X POST "$URL"
+wget --no-check-certificate https://example.com/f.tar.gz
+curl -k https://localhost:8443/health
+curl -sSL -K config.txt https://example.com
+curl -H "x-kind: k" https://example.com
+`,
+			want: []string{"shell.tls-verification-disabled:2", "shell.tls-verification-disabled:3", "shell.tls-verification-disabled:4"},
+		},
+		{
 			name: "download piped into a shell, including sudo",
 			src: `set -e
 curl -fsSL https://example.com/install.sh | sh

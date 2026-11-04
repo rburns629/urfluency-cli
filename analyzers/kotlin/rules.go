@@ -44,7 +44,9 @@ func (c *checker) checkCall(call *ts.Node) {
 		if !c.isTest && !c.inEntryPoint(call) && !benchmark(c.path) {
 			c.report("kotlin.run-blocking-in-production", call)
 		}
-	case sqlMethods[name] && receiver != nil:
+	case name == "printStackTrace" && receiver != nil && len(arguments(call)) == 0 && !c.isTest:
+		c.report("kotlin.print-stack-trace", call)
+	case sqlMethods[name] && receiver != nil && !c.isTest:
 		if args := arguments(call); len(args) > 0 && c.built(args[0]) {
 			c.report("kotlin.sql-string-built", call)
 		}

@@ -175,7 +175,45 @@ func (c *checker) checkCommand(n *ts.Node) {
 		if !c.errexit && !handled(c.tree, n) {
 			c.report("shell.cd-unchecked", n)
 		}
+	case "curl", "wget":
+		// Benchmarks, CI, and end-to-end scripts call test servers with
+		// self-signed certificates.
+		if c.insecureDownload(name, args) && !analysis.IsTestPath(c.path) && !parsing.InDir(c.path, "ci", "e2e", "bench", "benchmarks") {
+			c.report("shell.tls-verification-disabled", n)
+		}
 	}
+}
+
+// insecureDownload reports curl -k or --insecure, and wget
+// --no-check-certificate, to anything but this machine, where a self-signed
+// development certificate is expected.
+func (c *checker) insecureDownload(name string, args []*ts.Node) bool {
+	insecure := false
+	for _, a := range args {
+		t := strings.Trim(c.tree.Text(a), `"'`)
+		if strings.Contains(t, "localhost") || strings.Contains(t, "127.0.0.1") || strings.Contains(t, "[::1]") {
+			return false
+		}
+		switch {
+		case name == "wget":
+			insecure = insecure || t == "--no-check-certificate"
+		case t == "--insecure":
+			insecure = true
+		case len(t) > 1 && t[0] == '-' && t[1] != '-' && isShortFlags(t[1:]) && strings.ContainsRune(t[1:], 'k'):
+			insecure = true
+		}
+	}
+	return insecure
+}
+
+// isShortFlags reports a cluster of single-letter options, such as sSLk.
+func isShortFlags(s string) bool {
+	for _, r := range s {
+		if !(r >= 'a' && r <= 'z' || r >= 'A' && r <= 'Z') {
+			return false
+		}
+	}
+	return true
 }
 
 // isUnquotedExpansion reports whether a command argument is, or starts with,

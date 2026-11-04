@@ -33,6 +33,8 @@ var valueAndError = map[string]bool{
 	"os.Open":                     true,
 	"os.Create":                   true,
 	"io.ReadAll":                  true,
+	"io/ioutil.ReadAll":           true,
+	"io/ioutil.ReadFile":          true,
 	"net/url.Parse":               true,
 	"regexp.Compile":              true,
 	"regexp.MatchString":          true,
@@ -68,7 +70,8 @@ func (c *checker) qualifiedName(call *ast.CallExpr) string {
 }
 
 // checkIgnoredError flags known fallible calls whose error is dropped, either by
-// using the call as a statement or by assigning the error to the blank identifier.
+// using the call as a statement or by assigning or declaring the error as the
+// blank identifier.
 func (c *checker) checkIgnoredError(n ast.Node) {
 	switch n := n.(type) {
 	case *ast.ExprStmt:
@@ -90,6 +93,14 @@ func (c *checker) checkIgnoredError(n ast.Node) {
 		case errorOnly[name] && len(n.Lhs) == 1 && isBlank(n.Lhs[0]):
 			c.report("go.ignored-error", call.Pos())
 		case valueAndError[name] && len(n.Lhs) == 2 && isBlank(n.Lhs[1]):
+			c.report("go.ignored-error", call.Pos())
+		}
+	case *ast.ValueSpec:
+		// var ( id, _ = strconv.Atoi(s) )
+		if len(n.Values) != 1 || len(n.Names) != 2 || n.Names[1].Name != "_" {
+			return
+		}
+		if call, ok := n.Values[0].(*ast.CallExpr); ok && valueAndError[c.qualifiedName(call)] {
 			c.report("go.ignored-error", call.Pos())
 		}
 	}

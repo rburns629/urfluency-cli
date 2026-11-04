@@ -185,7 +185,7 @@ func (c *checker) checkBody(typ *ast.FuncType, body *ast.BlockStmt, isTest, allo
 			if !isTest {
 				c.checkHTTPTimeout(n, bounded)
 			}
-		case *ast.AssignStmt:
+		case *ast.AssignStmt, *ast.ValueSpec:
 			if !isTest {
 				c.checkIgnoredError(n)
 			}
