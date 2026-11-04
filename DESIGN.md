@@ -56,7 +56,7 @@ safe to run.
 ```
 ┌────────── user machine ──────────┐        ┌──────────── urfluency.com ────────────┐
 │ urfluency CLI                    │        │ API (Go)                              │
-│  ├ login (device flow)           │ HTTPS  │  ├ auth: Firebase, upload tokens      │
+│  ├ login (browser, bound key)    │ HTTPS  │  ├ auth: Firebase, upload tokens      │
 │  ├ analyzers (local)             │──────► │  ├ metrics ingest + scoring           │
 │  │  ├ code: per-language rules   │ metrics│  ├ public profile + badge endpoints   │
 │  │  └ sessions: agent logs       │  only  │  └ repo connections (GitHub App)      │
@@ -661,7 +661,7 @@ outcomes as hand-written code.
 ## CLI
 
 ```
-urfluency login                 # device flow at urfluency.com/connect; token in credentials.json (owner-only)
+urfluency login                 # approve in the browser (loopback + PKCE); token bound to a key in the keychain
 urfluency scan [path...]        # analyze repos; writes a local report
 urfluency report                # show the local report and what would be uploaded
 urfluency upload                # send aggregates; describes them first (--dry-run prints the exact payload)
@@ -1025,10 +1025,10 @@ repository owner has published.
 
 | Method and path | Auth | Purpose |
 | --- | --- | --- |
-| `POST /auth/device` | none | Start a CLI device login (RFC 8628) |
-| `POST /auth/device/token` | device code | Poll for the upload token |
-| `POST /auth/device/approve` | Firebase | Approve or deny a code as the signed-in user |
-| `POST /metrics` | upload token | Upload a payload from `urfluency upload` |
+| `POST /auth/cli` | none | Start a CLI login: PKCE challenge, the CLI's public key, its loopback address |
+| `POST /auth/cli/{id}/token` | code and verifier | Trade the approved login's code for an upload token bound to the key |
+| `POST /auth/cli/{id}/approve` | Firebase and emailed code | Approve or deny a login as the signed-in user |
+| `POST /metrics` | upload token, signed by its key | Upload a payload from `urfluency upload` |
 | `PUT /me` | Firebase | Set handle, name, and whether the profile is public |
 | `GET /users/{handle}` | none | Published profile: categories, languages, tiers, trends |
 | `GET /users/{handle}/languages/{language}` | none | Published per-language metrics |
@@ -1040,10 +1040,16 @@ repository owner has published.
 | `GET /rules/{id}` | none | Rule catalog entry |
 
 - Sign-in: Firebase Authentication with Google and email (decided 2026-10-27),
-  verified by API Gateway. The CLI uses a device flow: `urfluency login` shows a
-  code, the user approves it at urfluency.com/connect, and the CLI receives an
-  upload-only token that expires after 90 days; only its hash is stored, and the
-  CLI keeps it in `credentials.json` beside the settings, readable only by the user.
+  verified by API Gateway. `urfluency login` signs in like a native app (RFC 8252,
+  decided 2026-11-04, replacing a device flow that could be phished): it opens
+  urfluency.com, the user approves there after entering an emailed code, and the
+  site hands a one-time code to a listener on 127.0.0.1 (or shows it, with
+  `--no-browser`). The CLI trades it, with a PKCE verifier, for an upload-only
+  token that expires after 90 days and is bound to an Ed25519 key made for the
+  login; every request with the token is signed by that key. Only the token's
+  hash and the public key are stored. The CLI keeps the token in
+  `credentials.json` beside the settings, readable only by the user, and the key
+  in the system keychain (or in `credentials.json` where there is none).
   Personal API tokens with read-only scopes for portfolio use come later.
 - Built in `urfluency-app/api`. This table was the first plan; the current
   contract is `urfluency-app/api/openapi.yaml` (OpenAPI 2.0, for API Gateway), and

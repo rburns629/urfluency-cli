@@ -2,14 +2,16 @@ package cli
 
 import (
 	"context"
+	"errors"
 	"os"
 	"testing"
 
 	"github.com/rburns629/urfluency-cli/vulns"
 )
 
-// TestMain keeps tests away from the developer's saved settings and cache,
-// and from the network: dependency checks get a checker that sends nothing.
+// TestMain keeps tests away from the developer's saved settings, cache, and
+// keychain, and from the network: dependency checks get a checker that sends
+// nothing, and no browser opens.
 func TestMain(m *testing.M) {
 	dir, err := os.MkdirTemp("", "urfluency-test-config-")
 	if err != nil {
@@ -18,6 +20,8 @@ func TestMain(m *testing.M) {
 	os.Setenv("URFLUENCY_CONFIG_DIR", dir)
 	os.Setenv("URFLUENCY_CACHE_DIR", dir)
 	newLiveChecker = func() vulns.Checker { return offlineChecker{} }
+	keys = &memoryKeys{} // never the developer's keychain
+	openBrowser = func(string) error { return errors.New("no browser in tests") }
 	code := m.Run()
 	os.RemoveAll(dir)
 	os.Exit(code)

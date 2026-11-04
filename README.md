@@ -174,7 +174,7 @@ download once with `urfluency vulns update`, and sends nothing at all;
 To publish a profile and badges on urfluency.com:
 
 ```
-urfluency login                      # approve the code at urfluency.com/connect
+urfluency login                      # approve in your browser; --no-browser over SSH
 urfluency upload --since all ~/Projects
 ```
 
