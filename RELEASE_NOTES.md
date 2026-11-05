@@ -9,6 +9,10 @@ sums up the release in one line. Each change is a bullet that starts with
 `New:`, `Improved:`, `Fixed:`, or `Security:`, written for people who use the
 CLI rather than for people who work on it.
 
+## v1.5.1 (2026-11-05)
+
+- Security: golang.org/x/sys is updated from v0.27.0 to v0.49.0, which fixes GO-2026-5024 (CVE-2026-39824). The flaw is in a Windows-only function that urfluency does not call, and the release builds for macOS and Linux do not include it; the update clears the finding for anyone checking the CLI's dependencies.
+
 ## v1.5.0 (2026-11-04)
 
 A safer login: it can no longer be phished, and a copied token is useless.
