@@ -72,11 +72,11 @@ func TestIdiomStepPredictsTheScore(t *testing.T) {
 	}
 }
 
-func TestLowConfidenceLanguagesGetNoCodeSteps(t *testing.T) {
-	// Under 2,000 lines the score is capped at Beginner, so no fix can raise it.
+func TestSmallLanguagesGetCodeSteps(t *testing.T) {
+	// Volume no longer caps a score, so a fix in a small project raises it.
 	lang := buildLanguage(analysis.LanguageResult{Language: "go", OwnedLines: 1000, Findings: findings("go.unchecked-type-assertion", 30)}, false)
-	for _, s := range languageSteps(lang) {
-		t.Errorf("step for a capped language: %+v", s)
+	if len(languageSteps(lang)) == 0 {
+		t.Error("no steps for a small language with findings")
 	}
 }
 

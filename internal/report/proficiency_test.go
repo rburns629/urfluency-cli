@@ -26,28 +26,82 @@ func TestProficiency(t *testing.T) {
 		idioms     map[string]analysis.IdiomUse
 		counts     map[rules.Category]float64
 		score      int
-		level      string
 		confidence string
 	}{
-		{"clean code, no idioms", 10000, nil, nil, 65, "Intermediate", "high"},
-		{"clean code, every idiom", 10000, goIdioms(), nil, 100, "Expert", "high"},
+		{"clean code, no idioms", 10000, nil, nil, 65, "high"},
+		{"clean code, every idiom", 10000, goIdioms(), nil, 100, "high"},
 		// Type safety at 70 per 1,000 lines scores 12.5, which caps the language
 		// at 42.5 however strong the rest is.
-		{"one weak category", 10000, goIdioms(), map[rules.Category]float64{rules.TypeSafety: 700}, 43, "Intermediate", "high"},
-		{"one-off idioms do not count", 3000, map[string]analysis.IdiomUse{"go.idiom.generics": {Uses: 2, Files: 1}}, nil, 65, "Intermediate", "medium"},
-		// Under 2,000 lines, even perfect code is capped at Beginner.
-		{"too little code for more than Beginner", 1999, goIdioms(), nil, 39, "Beginner", "low"},
-		{"enough code", 2000, goIdioms(), nil, 100, "Expert", "medium"},
+		{"one weak category", 10000, goIdioms(), map[rules.Category]float64{rules.TypeSafety: 700}, 43, "high"},
+		{"one-off idioms do not count", 3000, map[string]analysis.IdiomUse{"go.idiom.generics": {Uses: 2, Files: 1}}, nil, 65, "medium"},
+		// Volume sets confidence, never the score.
+		{"a small, clean, idiomatic file", 300, goIdioms(), nil, 100, "low"},
+		{"a few lines", 12, nil, nil, 65, "low"},
 	}
 	for _, tc := range tests {
 		lr := analysis.LanguageResult{Language: "go", OwnedLines: tc.lines, Idioms: tc.idioms}
 		p, _, _ := proficiency(lr, tc.counts)
-		if p == nil || p.Score != tc.score || p.Level != tc.level || p.Confidence != tc.confidence {
-			t.Errorf("%s: proficiency = %+v, want %d %s %s", tc.name, p, tc.score, tc.level, tc.confidence)
+		if p == nil || p.Score != tc.score || p.Confidence != tc.confidence {
+			t.Errorf("%s: proficiency = %+v, want %d %s", tc.name, p, tc.score, tc.confidence)
 		}
 	}
-	if p, _, _ := proficiency(analysis.LanguageResult{Language: "go", OwnedLines: MinOwnedLines - 1}, nil); p != nil {
-		t.Errorf("scored a language with too little code: %+v", p)
+	if p, _, _ := proficiency(analysis.LanguageResult{Language: "go"}, nil); p != nil {
+		t.Errorf("scored a language with no code: %+v", p)
+	}
+}
+
+// pyShown demonstrates the given Python idioms and constructs in one file,
+// each in three functions.
+func pyShown(ids ...string) map[string]analysis.IdiomUse {
+	m := map[string]analysis.IdiomUse{}
+	for _, id := range ids {
+		m[id] = analysis.IdiomUse{Uses: 3, Files: 1, Functions: 3}
+	}
+	return m
+}
+
+func pyFindings(rule string, n, year int) []analysis.Finding {
+	var out []analysis.Finding
+	for range n {
+		out = append(out, analysis.Finding{Rule: rule, Year: year})
+	}
+	return out
+}
+
+// TestLevels: a level states what the code proves, apart from its score.
+func TestLevels(t *testing.T) {
+	advanced := pyShown("py.construct.protocol-methods", "py.idiom.type-hints", "py.idiom.f-string")
+	expert := pyShown("py.construct.protocol-methods", "py.construct.decorator-definition", "py.construct.generic-typing", "py.idiom.async", "py.idiom.type-hints",
+		"py.idiom.comprehension", "py.idiom.generator", "py.idiom.structured-data", "py.idiom.custom-exception", "py.idiom.f-string", "py.idiom.context-manager")
+	for _, tc := range []struct {
+		name     string
+		lines    int
+		idioms   map[string]analysis.IdiomUse
+		findings []analysis.Finding
+		level    string
+	}{
+		{"competent code with no evidence of more", 2000, nil, nil, "Intermediate"},
+		{"basic mistakes at a high rate", 1000, nil, pyFindings("py.bare-except", 10, 0), "Beginner"},
+		{"one basic slip in a short file", 100, nil, pyFindings("py.bare-except", 1, 0), "Beginner"},
+		{"three kinds of basic mistake", 800, nil, append(append(pyFindings("py.bare-except", 1, 0), pyFindings("py.mutable-default-argument", 1, 0)...), pyFindings("py.is-literal-comparison", 1, 0)...), "Beginner"},
+		// Three kinds once each in a large codebase is not a beginner's work.
+		{"three kinds of slip in a large codebase", 500000, nil, append(append(pyFindings("py.bare-except", 1, 0), pyFindings("py.mutable-default-argument", 1, 0)...), pyFindings("py.is-literal-comparison", 1, 0)...), "Intermediate"},
+		{"basic slips in plenty of code", 5000, nil, pyFindings("py.bare-except", 5, 0), "Intermediate"},
+		// Practice findings lower the score but never make a beginner.
+		{"many practice findings", 250, nil, pyFindings("py.open-without-with", 20, 0), "Intermediate"},
+		{"advanced constructs used correctly", 300, advanced, nil, "Advanced"},
+		{"command of the advanced parts", 2000, expert, nil, "Expert"},
+		// Expert also needs a score of 85: three advanced constructs with a
+		// narrow idiom range read Advanced.
+		{"advanced parts, narrow range", 2000, pyShown("py.construct.protocol-methods", "py.construct.decorator-definition", "py.construct.generic-typing", "py.idiom.type-hints"), nil, "Advanced"},
+		// A bare except was never good practice, so it counts whenever written.
+		{"basic mistakes count whenever written", 1000, nil, pyFindings("py.bare-except", 10, 2001), "Beginner"},
+	} {
+		lr := analysis.LanguageResult{Language: "python", OwnedLines: tc.lines, Idioms: tc.idioms, Findings: tc.findings}
+		lang := buildLanguage(lr, false)
+		if got := lang.Proficiency.Level; got != tc.level {
+			t.Errorf("%s: level %s (score %d, evidence %+v), want %s", tc.name, got, lang.Proficiency.Score, lang.Proficiency.Evidence, tc.level)
+		}
 	}
 }
 

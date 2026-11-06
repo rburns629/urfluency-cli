@@ -5,6 +5,12 @@ func idiom(id, title, shows string, languages ...string) Rule {
 	return Rule{ID: id, Category: Idiom, Languages: languages, Title: title, Why: shows}
 }
 
+// construct builds a positive rule for an advanced part of a language the
+// code uses; it shows capability without counting in the idiom range.
+func construct(id, title, shows string, languages ...string) Rule {
+	return Rule{ID: id, Category: Construct, Languages: languages, Title: title, Why: shows}
+}
+
 func init() {
 	js := []string{"javascript", "typescript"}
 	Register(
@@ -30,6 +36,10 @@ func init() {
 		idiom("py.idiom.protocol", "typing.Protocol", "Types interfaces structurally, without inheritance.", "python"),
 		idiom("py.idiom.pathlib", "pathlib", "Handles paths as objects instead of string joins.", "python"),
 		idiom("py.idiom.pytest", "pytest fixtures and parametrize", "Shares setup and covers many cases without repeating tests.", "python"),
+		construct("py.construct.protocol-methods", "Protocol methods", "Defines methods such as __getitem__, __iter__, or __enter__, so objects work with Python's own syntax.", "python"),
+		construct("py.construct.decorator-definition", "Decorators of your own", "Writes functions that wrap other functions, keeping their names with functools.wraps.", "python"),
+		construct("py.construct.metaprogramming", "Descriptors and metaclasses", "Customizes how attributes or classes behave, with __get__ and __set__ or a metaclass.", "python"),
+		construct("py.construct.generic-typing", "Generic and overloaded types", "Writes types that work across types, with TypeVar, Generic, ParamSpec, @overload, or type parameters.", "python"),
 
 		idiom("js.idiom.optional-chaining", "Optional chaining (?.)", "Reads nested values safely without long && chains.", js...),
 		idiom("js.idiom.nullish-coalescing", "Nullish coalescing (??)", "Defaults only null and undefined, unlike || which also replaces 0 and \"\".", js...),

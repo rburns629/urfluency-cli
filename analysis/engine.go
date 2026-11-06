@@ -125,10 +125,13 @@ type LanguageResult struct {
 	Evidence *Evidence
 }
 
-// IdiomUse is how often, and in how many files, owned code used an idiom.
+// IdiomUse is how often, and in how many files and functions, owned code
+// used an idiom or construct. A use belongs to the nearest function starting
+// at or before it in its file, or to the file before the first one.
 type IdiomUse struct {
-	Uses  int
-	Files int
+	Uses      int
+	Files     int
+	Functions int
 }
 
 // Result is the outcome of scanning one or more repositories.
@@ -513,7 +516,8 @@ func run(ctx context.Context, name string, group []ownedFile,
 		}
 	}
 	skipped, skippedByRule := 0, map[string]int{}
-	idiomFiles := map[string]map[string]bool{}
+	idiomFiles, idiomFuncs := map[string]map[string]bool{}, map[string]map[string]bool{}
+	functionOf := functionStarts(findings)
 	for _, fd := range findings {
 		if owned[fd.Path][fd.Line] == "" {
 			continue
@@ -548,6 +552,13 @@ func run(ctx context.Context, name string, group []ownedFile,
 				idiomFiles[fd.Rule][fd.Path] = true
 				u.Files++
 			}
+			if idiomFuncs[fd.Rule] == nil {
+				idiomFuncs[fd.Rule] = map[string]bool{}
+			}
+			if fn := fmt.Sprintf("%s:%d", fd.Path, functionOf(fd.Path, fd.Line)); !idiomFuncs[fd.Rule][fn] {
+				idiomFuncs[fd.Rule][fn] = true
+				u.Functions++
+			}
 			lr.Idioms[fd.Rule] = u
 			continue
 		}
@@ -564,6 +575,35 @@ func run(ctx context.Context, name string, group []ownedFile,
 		return lr.Findings[i].Line < lr.Findings[j].Line
 	})
 	return lr, runCounts{dismissed: skipped, dismissedByRule: skippedByRule, unanalyzed: unanalyzed}, nil
+}
+
+// functionStarts returns, for a line of a file, the start line of the
+// nearest function starting at or before it, from the analyzers' function
+// evidence, or 0 before the file's first function. Evidence has no end lines,
+// so a use after a nested function, still inside its outer one, is credited
+// to the nested function: an approximation that can count one function as
+// two, and test files, which report no evidence, count as one function each.
+func functionStarts(findings []Finding) func(path string, line int) int {
+	starts := map[string][]int{}
+	for _, fd := range findings {
+		if fd.Positive && fd.Rule == EvidenceFunction {
+			starts[fd.Path] = append(starts[fd.Path], fd.Line)
+		}
+	}
+	for _, s := range starts {
+		slices.Sort(s)
+	}
+	return func(path string, line int) int {
+		s := starts[path]
+		i, found := slices.BinarySearch(s, line)
+		switch {
+		case found:
+			return s[i]
+		case i == 0:
+			return 0
+		}
+		return s[i-1]
+	}
 }
 
 // earliestYear is when Git was first released: an owned line dated before it

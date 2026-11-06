@@ -6,15 +6,38 @@ func TestCatalogIsComplete(t *testing.T) {
 	if d := Duplicates(); len(d) > 0 {
 		t.Fatalf("duplicate rule IDs: %v", d)
 	}
-	valid := map[Category]bool{CleanCode: true, Architecture: true, TypeSafety: true, LanguageProficiency: true, Security: true, AIEngineering: true, Idiom: true}
+	valid := map[Category]bool{CleanCode: true, Architecture: true, TypeSafety: true, LanguageProficiency: true, Security: true, AIEngineering: true, Idiom: true, Construct: true}
 	for id, r := range catalog {
-		// Idioms are strengths, so they have no focus advice.
-		if r.ID != id || r.Title == "" || r.Why == "" || (r.Focus == "") != (r.Category == Idiom) || len(r.Languages) == 0 {
+		// Idioms and constructs are strengths, so they have no focus advice.
+		if r.ID != id || r.Title == "" || r.Why == "" || (r.Focus == "") != r.Category.Positive() || len(r.Languages) == 0 {
 			t.Errorf("rule %s is missing fields: %+v", id, r)
 		}
 		if !valid[r.Category] {
 			t.Errorf("rule %s has unknown category %q", id, r.Category)
 		}
+		// A problem's tier says how basic a mistake it is; a strength's,
+		// how much using it shows.
+		problem := map[Tier]bool{Fundamental: true, Practice: true, Advanced: true}
+		strength := map[Tier]bool{Basic: true, Intermediate: true, Advanced: true}
+		if ok := strength; !r.Category.Positive() {
+			ok = problem
+			if !ok[r.Level()] {
+				t.Errorf("problem %s has tier %q", id, r.Level())
+			}
+		} else if !ok[r.Level()] {
+			t.Errorf("strength %s has tier %q", id, r.Level())
+		}
+	}
+	for id := range tiers {
+		if _, ok := catalog[id]; !ok {
+			t.Errorf("tier for unknown rule %s", id)
+		}
+	}
+	if r, _ := Lookup("py.bare-except"); r.Level() != Fundamental {
+		t.Errorf("bare except is %q, want fundamental", r.Level())
+	}
+	if r, _ := Lookup("py.open-without-with"); r.Level() != Practice {
+		t.Errorf("open without with is %q, want practice", r.Level())
 	}
 }
 

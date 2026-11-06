@@ -431,7 +431,7 @@ func buildLanguage(lr analysis.LanguageResult, withLocations bool) Language {
 	if lang.Sufficient {
 		checked := map[string]int{}
 		for _, rule := range rules.ForLanguage(lr.Language) {
-			if rule.Category != rules.Idiom {
+			if !rule.Category.Positive() {
 				checked[string(rule.Category)]++
 			}
 		}

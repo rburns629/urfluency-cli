@@ -98,6 +98,9 @@ type Evidence struct {
 type Idiom struct {
 	Uses  int `json:"uses"`
 	Files int `json:"files"`
+	// Functions is absent from CLIs before 1.7.0, whose idioms count by
+	// files alone.
+	Functions int `json:"functions,omitempty"`
 }
 
 // Usage is a count of repositories and of files.
