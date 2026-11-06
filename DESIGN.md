@@ -410,10 +410,22 @@ A fundamental rule must not fire on deliberate expert code, so the audit
 moved to practice what the `top` projects use on purpose: Python's bare
 except, swallowed exceptions, and mutable defaults; JavaScript's loose
 equality and empty catch; Go's empty switch case; Python's loop else.
-Beginner rests on fundamental rules for Python (13), Go (8), JavaScript
-and TypeScript (7), and Java (1). The other languages have none yet, so
-their code is never rated Beginner: their fundamental rules are the next
-step.
+Beginner rests on fundamental rules: Python 14, Go 8, JavaScript 7,
+TypeScript 6, PHP 6, C# 5, Ruby 5, C and C++ 4, Kotlin 3, and Java 1. The
+rules shared across C#, PHP, C, Ruby, and Kotlin (code after leaving a
+block, a repeated condition, assignment to itself, comparison with NaN,
+and a literal assigned as a condition) are described once, per grammar,
+in the engine's fundamental package; C# adds throw e resetting the stack
+trace, and PHP a loose test of strpos. Each was narrowed until it found
+nothing on the corpus's `top` projects: labels, case labels, and
+preprocessor lines make code reachable again, a defensive break after
+return is a habit, a Ruby rescue runs after return, and Kotlin's grammar
+splits multi-line if expressions, so Kotlin is not checked for
+unreachable code. Rust, Swift, Dart, Shell, and PowerShell have no
+fundamental rules yet, so their code is never rated Beginner. Narrow rules
+make Beginner rare: on the corpus, average learner code reads
+Intermediate, as it should, and Beginner marks code with clear basic
+mistakes.
 
 ### Summary and experience ratings
 
