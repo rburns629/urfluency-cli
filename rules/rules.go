@@ -19,7 +19,14 @@ const (
 	// Idiom rules are positive: they record practices the code uses well and
 	// count toward proficiency, never against it.
 	Idiom Category = "idiom"
+	// Construct rules are positive too: advanced parts of a language the code
+	// uses, such as defining protocol methods. They show capability for the
+	// level and stay out of the idiom range.
+	Construct Category = "construct"
 )
+
+// Positive reports whether a category records what code does well.
+func (c Category) Positive() bool { return c == Idiom || c == Construct }
 
 // Rule describes one detectable practice and how to improve on it.
 type Rule struct {
@@ -33,6 +40,10 @@ type Rule struct {
 	// Era is when the practice became possible and expected; zero for most
 	// rules, which flag what was never good practice.
 	Era Era
+	// Tier places the rule on the path from learning a language to
+	// commanding it (see Tier); empty is Practice for a problem and Basic
+	// for an idiom or construct.
+	Tier Tier
 }
 
 var (
@@ -50,6 +61,9 @@ func Register(rs ...Rule) {
 		}
 		if e, ok := eras[r.ID]; ok && r.Era == (Era{}) {
 			r.Era = e
+		}
+		if t, ok := tiers[r.ID]; ok && r.Tier == "" {
+			r.Tier = t
 		}
 		catalog[r.ID] = r
 	}

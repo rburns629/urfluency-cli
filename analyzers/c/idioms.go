@@ -29,6 +29,7 @@ var (
 // visitIdioms finds the C idioms that show fluency: each is a deliberate choice
 // the language does not force.
 func (c *checker) visitIdioms(n *ts.Node) bool {
+	c.visitConstructs(n)
 	switch n.Kind() {
 	case "call_expression":
 		name := c.callee(n)

@@ -301,6 +301,132 @@ such commits in `.git-blame-ignore-revs` get them skipped, as `git blame
 --ignore-revs-file` does. Years are coarse: a line from the month a feature
 shipped counts as if from all of that year.
 
+### Levels from evidence (drafted, not built)
+
+Two rules mislabelled small, capable code; raised on 2026-11-06 from the
+author's KeyMapper, a 249-line dict subclass on PyPI that the repository
+checker rated 36, Beginner. Agreed the same day:
+
+**A score measures quality; a level states what the code proves its author
+knows.** Until now the level was the score's band, so code overriding
+`__getitem__`, `__setattr__`, and `__getattr__` read "Beginner", a word for
+someone still learning the language, because 22 findings sat in 249 lines.
+Those findings were advanced features used imperfectly, not basic
+mistakes. Each level is now defined by evidence the engine can see:
+
+| Level | Meaning | Evidence |
+| --- | --- | --- |
+| Beginner | still learning the language's core rules | fundamental mistakes at a meaningful rate |
+| Intermediate | knows the core; writes working, conventional code | no fundamental pattern; the default for competent code |
+| Advanced | uses the language's richer tools, correctly | an advanced idiom or construct and another of intermediate tier or above, with few mistakes at advanced tier |
+| Expert | commands the language's advanced parts, cleanly | three distinct advanced idioms or constructs, almost no mistakes at advanced tier, and a score of 85 or more |
+
+- **Rule tiers.** A *fundamental* mistake shows a misunderstanding of how
+  the language works, not style or design: in Python, a method tested
+  without being called, a coroutine called without `await`, `is` with a
+  literal, `== None`, mutable default arguments, a list changed while it is
+  looped over, closures in a loop that all see its last value, a local name
+  that hides a global, a built-in name reused, a condition that is always
+  true (`x == "a" or "b"`), code after `return`, duplicate branches,
+  `return` in `finally`, bare `except`, swallowed exceptions. A *practice*
+  rule, the default, is a habit or judgment (an `except` that only
+  re-raises, missing annotations, complexity, a file opened without `with`,
+  security). An *advanced* rule is a mistake possible only with an advanced
+  feature (a `__getattr__` that never raises `AttributeError`, a dataclass
+  with no fields, a blocking call in `async`).
+- **Capability.** Idioms are tiered *basic*, *intermediate*, or *advanced*,
+  and a new positive category, `construct`, records advanced constructs that
+  are not idioms (in Python: defining protocol methods such as `__getitem__`
+  or `__enter__`, defining decorators, descriptors and metaclasses, and
+  generic types with `TypeVar`, `Generic`, `ParamSpec`, `@overload`, or type
+  parameters). Constructs stay out of the idiom range. A practice a
+  framework asks for shows familiarity, not command: `async def`, which
+  FastAPI and discord.py require, is intermediate, and `Annotated` is not
+  counted.
+- **Beginner** needs fundamental findings, era-weighted, at 10 per 1,000
+  lines (the rate at which a category scores 50), or 3 distinct fundamental
+  rules at 3 per 1,000 or more, so one slip in a short file does not decide
+  it and three kinds once each in half a million lines (black, SQLAlchemy)
+  do not either. Fundamental rules skip test files, where odd code is often
+  deliberate, and each must find nothing on the corpus's `top` projects.
+
+**Volume sets confidence, never the score.** The ceiling of official-3,
+which held a score below what a project's amount of logic supported, is
+removed: more code makes a rating more certain, not higher, and a short,
+capable module rates what it is, with low confidence. Confidence keeps
+official-3's measure (low below 320 units of functions and branches, high
+from five times that, or 2,000 and 10,000 lines without them).
+
+**Idioms by function, not only by file.** An idiom or construct counts with
+3 uses across 2 files, or across 2 functions. Analyzers already report each
+function's start line (all but shell); the engine assigns each use to the
+nearest function starting at or before it in the same file, a use before
+the first function to the file itself. Facts gain `functions` per idiom.
+
+**The local model catches up.** local-0.5 drops its 300-line minimum and
+2,000-line Beginner cap and uses these levels; the official model becomes
+official-6. Facts from older CLIs carry no idiom functions and are scored
+by files as before.
+
+**Accuracy is measured.** The engine's regression corpus labels 259 public
+repositories `top` (well-known projects) or `learner` (beginner and average
+ones). A level harness scans each language's part with an official build:
+`top` code should rate Advanced or Expert, `learner` code Beginner or
+Intermediate, and each model change reports how often it does.
+
+Python comes first; each other language is audited the same way (tiers,
+constructs, fundamental rules, the harness) before the engine is released.
+Python on 2026-11-06: 44 of 45 corpus repositories agree (14 of 15 `top`,
+30 of 30 `learner`). The one disagreement, the FastAPI full-stack template,
+is deliberately simple CRUD code, whose Intermediate the model keeps rather
+than be tuned to a label. The 12 new fundamental rules found nothing on
+`top` code after narrowing and 4 real mistakes in `learner` code.
+
+Every language was audited the same day. Each repository is judged in its
+main language, from 200 lines:
+
+| Language | Agree | Language | Agree |
+| --- | --- | --- | --- |
+| Python | 34 of 34 | C# | 23 of 23 |
+| Go | 23 of 24 | Java | 19 of 20 |
+| PHP | 21 of 23 | Ruby | 22 of 25 |
+| Kotlin | 18 of 20 | JavaScript | 11 of 14 |
+| TypeScript | 10 of 13 | C | 8 of 9 |
+| C++ | 6 of 7 | Rust, Swift, Dart, Shell, PowerShell | all |
+
+The disagreements are simple, well-known samples rated Intermediate (the
+Laravel skeleton, spring-petclinic, Android's sunflower, Express
+boilerplates, commander.js) and learner projects whose code shows advanced
+command (reflection in a Go API, metaprogramming in a Rails blog).
+Constructs were added where expert code showed command the idioms missed:
+Go channels, sync and atomics, iterators, and reflection; JavaScript's
+object model, generators, Proxy and Reflect; TypeScript's type-level
+programming; Ruby's metaprogramming; Shell's parameter expansion; PHP's
+traits, generators, and magic methods; C's function pointers, variadic
+functions, and memory layout; Java's generics, concurrency, reflection, and
+annotation types.
+
+A fundamental rule must not fire on deliberate expert code, so the audit
+moved to practice what the `top` projects use on purpose: Python's bare
+except, swallowed exceptions, and mutable defaults; JavaScript's loose
+equality and empty catch; Go's empty switch case; Python's loop else.
+Beginner rests on fundamental rules: Python 14, Go 8, JavaScript 7,
+TypeScript 6, PHP 6, C# 5, Ruby 5, C and C++ 4, Kotlin 3, and Java 1. The
+rules shared across C#, PHP, C, Ruby, and Kotlin (code after leaving a
+block, a repeated condition, assignment to itself, comparison with NaN,
+and a literal assigned as a condition) are described once, per grammar,
+in the engine's fundamental package; C# adds throw e resetting the stack
+trace, and PHP a loose test of strpos. Each was narrowed until it found
+nothing on the corpus's `top` projects: labels, case labels, and
+preprocessor lines make code reachable again, a defensive break after
+return is a habit, a Ruby rescue runs after return, and Kotlin's grammar
+splits multi-line if expressions, so Kotlin is not checked for
+unreachable code. Rust, Swift, Dart, Shell, and PowerShell have no
+fundamental rules yet, so their code is never rated Beginner. Narrow rules
+make Beginner rare: on the corpus, average learner code reads
+Intermediate, as it should, and Beginner marks code with clear basic
+mistakes.
+
 ### Summary and experience ratings
 
 The final result is `combined`: all work with and without Git, merged at the

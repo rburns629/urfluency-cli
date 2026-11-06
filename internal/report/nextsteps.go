@@ -66,10 +66,14 @@ func languageSteps(lang Language) []Step {
 	if p == nil || lang.OwnedLines == 0 {
 		return nil
 	}
-	catalog, size := 0.0, 0
+	catalog, size, idioms := 0.0, 0, 0
 	shown := map[string]bool{}
 	for _, i := range lang.Idioms {
 		shown[i.ID] = true
+		// The list also names constructs, which are not in the range.
+		if r, ok := rules.Lookup(i.ID); ok && r.Category == rules.Idiom {
+			idioms++
+		}
 	}
 	// Each idiom weighs as the score weighed it; a language read back from
 	// JSON has no weights, and each idiom weighs 1.
@@ -107,14 +111,11 @@ func languageSteps(lang Language) []Step {
 			scores = append(scores, categoryScore(rules.Category(c), counts[c]/kLines))
 		}
 		s := blend(min(100, 100*float64(idioms)/catalog), scores)
-		if p.Confidence == "low" {
-			s = min(s, beginnerMax)
-		}
 		return int(math.Round(s))
 	}
 	// Gains are measured from the formula's own baseline and applied to the
 	// published score, so rounding cannot invent or hide a point.
-	base := score(weighted, len(lang.Idioms), catalog)
+	base := score(weighted, idioms, catalog)
 	name := displayLanguage(lang.Language)
 	var out []Step
 	for _, w := range lang.Weaknesses {
@@ -126,7 +127,7 @@ func languageSteps(lang Language) []Step {
 			counts[c] = n
 		}
 		counts[w.Category] -= weightedCount(w)
-		if gain := score(counts, len(lang.Idioms), catalog) - base; gain >= minStepGain {
+		if gain := score(counts, idioms, catalog) - base; gain >= minStepGain {
 			out = append(out, Step{Area: "language", Name: lang.Language, Kind: "fix", Rule: w.ID,
 				Action: fmt.Sprintf("%s: %s", w.Title, w.Focus),
 				Detail: fmt.Sprintf("%s in %s %s lines", count(w.Count, "finding"), thousands(lang.OwnedLines), name),
@@ -136,7 +137,7 @@ func languageSteps(lang Language) []Step {
 	if len(missing) > 0 {
 		// Demonstrating an idiom also gives it full weight in the range.
 		next := catalog + 1 - weight(missing[0].ID)
-		if gain := score(weighted, len(lang.Idioms)+1, next) - base; gain >= minStepGain {
+		if gain := score(weighted, idioms+1, next) - base; gain >= minStepGain {
 			for _, r := range missing[:min(2, len(missing))] {
 				action := r.Focus
 				if action == "" {
@@ -144,8 +145,8 @@ func languageSteps(lang Language) []Step {
 				}
 				out = append(out, Step{Area: "language", Name: lang.Language, Kind: "idiom", Rule: r.ID,
 					Action: fmt.Sprintf("Use %s where it fits: %s", lowerFirst(r.Title), action),
-					Detail: fmt.Sprintf("an idiom counts once used %d times across %d files; %d of %d %s idioms shown so far",
-						minIdiomUses, minIdiomFiles, len(lang.Idioms), size, name),
+					Detail: fmt.Sprintf("an idiom counts once used %d times across %d files or functions; %d of %d %s idioms shown so far",
+						minIdiomUses, minIdiomFiles, idioms, size, name),
 					From: p.Score, To: min(100, p.Score+gain)})
 			}
 		}

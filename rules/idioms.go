@@ -5,6 +5,12 @@ func idiom(id, title, shows string, languages ...string) Rule {
 	return Rule{ID: id, Category: Idiom, Languages: languages, Title: title, Why: shows}
 }
 
+// construct builds a positive rule for an advanced part of a language the
+// code uses; it shows capability without counting in the idiom range.
+func construct(id, title, shows string, languages ...string) Rule {
+	return Rule{ID: id, Category: Construct, Languages: languages, Title: title, Why: shows}
+}
+
 func init() {
 	js := []string{"javascript", "typescript"}
 	Register(
@@ -18,6 +24,10 @@ func init() {
 		idiom("go.idiom.generics", "Type parameters", "Writes reusable, type-safe code without interface{} and assertions.", "go"),
 		idiom("go.idiom.small-interface", "Small interfaces", "Defines interfaces of one to three methods, which keep dependencies narrow.", "go"),
 		idiom("go.idiom.table-driven-test", "Table-driven subtests", "Covers many cases in one readable test with t.Run per case.", "go"),
+		construct("go.construct.channels", "Channel select and directional channels", "Coordinates goroutines with select over several channels, and states which way each channel flows.", "go"),
+		construct("go.construct.sync", "Atomics and advanced sync", "Shares state with sync/atomic, sync.Once, sync.Pool, sync.RWMutex, sync.Cond, or sync.Map.", "go"),
+		construct("go.construct.iterators", "Iterators", "Writes iter.Seq and iter.Seq2 functions that range loops can consume.", "go"),
+		construct("go.construct.reflection", "Reflection", "Inspects and builds values at run time with the reflect package.", "go"),
 
 		idiom("py.idiom.type-hints", "Return type annotations", "Lets type checkers and readers see what functions return.", "python"),
 		idiom("py.idiom.structured-data", "Dataclasses and typed models", "Uses dataclasses, Pydantic, TypedDict, or NamedTuple instead of loose dicts.", "python"),
@@ -30,6 +40,22 @@ func init() {
 		idiom("py.idiom.protocol", "typing.Protocol", "Types interfaces structurally, without inheritance.", "python"),
 		idiom("py.idiom.pathlib", "pathlib", "Handles paths as objects instead of string joins.", "python"),
 		idiom("py.idiom.pytest", "pytest fixtures and parametrize", "Shares setup and covers many cases without repeating tests.", "python"),
+		construct("ruby.construct.metaprogramming", "Metaprogramming", "Defines methods at run time and hooks into class definition, with define_method, class_eval, method_missing, or included.", "ruby"),
+		construct("shell.construct.expansion", "Advanced parameter expansion", "Transforms values with ${x//a/b}, ${x#p}, ${!name}, and process substitution, without external tools.", "shell"),
+		construct("php.construct.traits", "Traits", "Shares behavior across classes with traits.", "php"),
+		construct("php.construct.generators", "Generators", "Produces values lazily with yield.", "php"),
+		construct("php.construct.metaprogramming", "Magic methods and reflection", "Intercepts access with __get, __call, and __invoke, or inspects classes with Reflection.", "php"),
+		construct("c.construct.function-pointers", "Function pointers", "Passes and stores behavior as pointers to functions, for callbacks and dispatch tables.", "c"),
+		construct("c.construct.variadic", "Variadic functions", "Writes functions that take a variable number of arguments.", "c"),
+		construct("c.construct.memory-layout", "Unions and bit fields", "Controls how data is laid out in memory with unions and bit fields.", "c"),
+		construct("java.construct.generic-types", "Generic types and methods", "Declares classes and methods with type parameters.", "java"),
+		construct("java.construct.concurrency", "Concurrency", "Shares work and state across threads with synchronized, volatile, and java.util.concurrent.", "java"),
+		construct("java.construct.reflection", "Reflection", "Inspects and invokes classes, methods, and fields at run time.", "java"),
+		construct("java.construct.annotation-types", "Annotation types", "Declares annotations of its own with @interface.", "java"),
+		construct("py.construct.protocol-methods", "Protocol methods", "Defines methods such as __getitem__, __iter__, or __enter__, so objects work with Python's own syntax.", "python"),
+		construct("py.construct.decorator-definition", "Decorators of your own", "Writes functions that wrap other functions, keeping their names with functools.wraps.", "python"),
+		construct("py.construct.metaprogramming", "Descriptors and metaclasses", "Customizes how attributes or classes behave, with __get__ and __set__ or a metaclass.", "python"),
+		construct("py.construct.generic-typing", "Generic and overloaded types", "Writes types that work across types, with TypeVar, Generic, ParamSpec, @overload, or type parameters.", "python"),
 
 		idiom("js.idiom.optional-chaining", "Optional chaining (?.)", "Reads nested values safely without long && chains.", js...),
 		idiom("js.idiom.nullish-coalescing", "Nullish coalescing (??)", "Defaults only null and undefined, unlike || which also replaces 0 and \"\".", js...),
@@ -42,6 +68,10 @@ func init() {
 		idiom("ts.idiom.type-guard", "Type guards (x is T)", "Narrows types safely with checks the compiler trusts.", "typescript"),
 		idiom("ts.idiom.declared-types", "Interfaces and type aliases", "Names the shapes of data instead of leaving them implicit.", "typescript"),
 		idiom("ts.idiom.unknown", "unknown instead of any", "Forces values from outside to be checked before use.", "typescript"),
+		construct("js.construct.generators", "Generators and iterators", "Writes generator functions and objects that for...of can iterate, with Symbol.iterator.", js...),
+		construct("js.construct.metaprogramming", "Proxy and Reflect", "Intercepts and forwards operations on objects with Proxy and Reflect.", js...),
+		construct("js.construct.object-model", "The object model", "Shapes objects with prototypes, property descriptors, and getters and setters.", js...),
+		construct("ts.construct.type-level", "Type-level programming", "Computes types with conditional, mapped, infer, and template literal types.", "typescript"),
 		idiom("ts.idiom.utility-types", "Utility types", "Derives types with Partial, Pick, Omit, and Record instead of repeating them.", "typescript"),
 	)
 }

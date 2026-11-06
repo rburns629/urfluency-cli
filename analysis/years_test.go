@@ -70,3 +70,33 @@ func TestFutureAndPreGitYears(t *testing.T) {
 		}
 	}
 }
+
+// TestIdiomFunctions counts the functions an idiom is used in, so a single
+// file can show one.
+func TestIdiomFunctions(t *testing.T) {
+	r := testutil.NewRepo(t)
+	r.Commit("me@example.com", "2026-01-01T00:00:00Z", map[string]string{"one.py": `def a(x) -> int:
+    return x
+
+
+def b(x) -> int:
+    return x
+
+
+def c(x) -> int:
+    return x
+`})
+	res, err := analysis.Scan(context.Background(), gitdata.Repo{Dir: r.Dir}, analysis.Options{Emails: []string{"me@example.com"}})
+	if err != nil {
+		t.Fatal(err)
+	}
+	for _, lr := range res.Languages {
+		if lr.Language == "python" {
+			if u := lr.Idioms["py.idiom.type-hints"]; u.Uses != 3 || u.Files != 1 || u.Functions != 3 {
+				t.Errorf("type hints = %+v, want 3 uses in 1 file and 3 functions", u)
+			}
+			return
+		}
+	}
+	t.Fatal("no python result")
+}

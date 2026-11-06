@@ -117,12 +117,14 @@ func Summarize(r *Report) {
 	// Ratings: languages, frameworks, design areas, platforms, tools, ways of
 	// working, prompting.
 	weighted, lines := 0.0, 0
+	levelLines := map[string]int{}
 	for _, l := range langs {
 		p := l.lang.Proficiency
 		s.Ratings = append(s.Ratings, Rating{Area: "language", Name: l.lang.Language, Score: p.Score, Level: p.Level, Basis: "code",
 			Confidence: p.Confidence, Verified: l.verified, Evidence: l.evidence()})
 		weighted += float64(p.Score * l.lang.OwnedLines)
 		lines += l.lang.OwnedLines
+		levelLines[p.Level] += l.lang.OwnedLines
 	}
 	s.Ratings = append(s.Ratings, frameworkRatings(r, c)...)
 	for _, d := range design {
@@ -158,7 +160,7 @@ func Summarize(r *Report) {
 	})
 	if lines > 0 {
 		score := int(math.Round(weighted / float64(lines)))
-		s.Overall = &Rating{Area: "overall", Name: "code", Score: score, Level: level(score), Basis: "code",
+		s.Overall = &Rating{Area: "overall", Name: "code", Score: score, Level: overallLevel(levelLines), Basis: "code",
 			Confidence: linesConfidence(lines), Verified: c.Projects == 0,
 			Evidence: fmt.Sprintf("%s across %s, weighted by lines", thousands(lines), count(len(langs), "rated language"))}
 	}
@@ -430,7 +432,7 @@ func designTrends(design []DesignArea, total int) []string {
 
 func headline(overall *Rating, langs []ratedLanguage, design []DesignArea, total int) string {
 	if overall == nil {
-		return "Not enough code of yours to rate yet; ratings start at " + strconv.Itoa(MinOwnedLines) + " lines per language."
+		return "Not enough code of yours to rate yet."
 	}
 	var parts []string
 	parts = append(parts, fmt.Sprintf("%s by code (%d/100, %s confidence)", overall.Level, overall.Score, overall.Confidence))
@@ -748,4 +750,17 @@ func ratingLabel(area, name string) string {
 		}
 	}
 	return sentenceCase(name)
+}
+
+// overallLevel is the level that most of the rated code holds, by owned
+// lines; a tie goes to the lower level, so the headline never claims more
+// than most of the code shows.
+func overallLevel(lines map[string]int) string {
+	best, most := "Intermediate", -1
+	for _, lv := range []string{"Beginner", "Intermediate", "Advanced", "Expert"} {
+		if n, ok := lines[lv]; ok && n > most {
+			best, most = lv, n
+		}
+	}
+	return best
 }

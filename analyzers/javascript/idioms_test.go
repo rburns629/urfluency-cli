@@ -61,3 +61,53 @@ type Patch = Partial<User>;
 		}
 	}
 }
+
+func TestConstructs(t *testing.T) {
+	js := `function* ids() { yield 1 }
+const gen = function* () { yield 2 }
+class Bag {
+  *[Symbol.iterator]() { yield 3 }
+  size() { return 0 }
+}
+const p = new Proxy({}, { get: (t, k) => Reflect.get(t, k) })
+const q = new Map()
+function Legacy() {}
+Legacy.prototype.run = function () {}
+Object.defineProperty(Legacy, "name", { value: "L" })
+const keys = Object.keys(q)
+class Box {
+  get size() { return 0 }
+}
+`
+	ts := `type Unwrap<T> = T extends Promise<infer U> ? U : T
+type ReadonlyAll<T> = { readonly [K in keyof T]: T[K] }
+type Route = ` + "`/${string}`" + `
+type Plain = { a: string }
+`
+	got := map[string]int{}
+	for path, src := range map[string]string{"a.js": js, "b.ts": ts} {
+		var a analysis.Analyzer = JavaScript{}
+		if strings.HasSuffix(path, ".ts") {
+			a = TypeScript{}
+		}
+		findings, err := a.Analyze(context.Background(), []analysis.File{{Path: path, Content: []byte(src)}})
+		if err != nil {
+			t.Fatal(err)
+		}
+		for _, f := range findings {
+			if strings.Contains(f.Rule, ".construct.") {
+				got[f.Rule]++
+			}
+		}
+	}
+	// Prototype assignment, defineProperty, and a getter; not Object.keys.
+	want := map[string]int{"js.construct.generators": 3, "js.construct.metaprogramming": 2, "ts.construct.type-level": 3, "js.construct.object-model": 3}
+	for rule, n := range want {
+		if got[rule] != n {
+			t.Errorf("%s = %d, want %d", rule, got[rule], n)
+		}
+		if r, ok := rules.Lookup(rule); !ok || r.Category != rules.Construct || r.Level() != rules.Advanced {
+			t.Errorf("%s is not an advanced construct", rule)
+		}
+	}
+}

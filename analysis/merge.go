@@ -126,6 +126,7 @@ func Merge(labels []string, parts []Result) Result {
 				sum := m.Idioms[rule]
 				sum.Uses += u.Uses
 				sum.Files += u.Files
+				sum.Functions += u.Functions
 				m.Idioms[rule] = sum
 			}
 			for _, fd := range lr.Findings {

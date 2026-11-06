@@ -12,7 +12,7 @@ import (
 
 // ProficiencyModel versions the scoring below. Its constants are reasoned
 // starting points, not yet calibrated against outcomes (see DESIGN.md).
-const ProficiencyModel = "local-0.4-uncalibrated"
+const ProficiencyModel = "local-0.5-uncalibrated"
 
 // Proficiency rates one language from the user's own code: how much of the
 // language's idiom range they use, and how cleanly they write it.
@@ -23,6 +23,9 @@ type Proficiency struct {
 	Range      int                      `json:"range"`      // 0–100: share of the language's idioms demonstrated
 	Categories map[string]CategoryScore `json:"categories"`
 	Model      string                   `json:"model"`
+	// Evidence is what the level rests on: the capability the code shows
+	// and its fundamental and advanced-tier mistakes.
+	Evidence Evidence `json:"evidence"`
 }
 
 // CategoryScore rates one category of problems, such as type safety.
@@ -59,34 +62,46 @@ const (
 	// strong category cannot hide a weak one.
 	weakestLead = 30
 	// An idiom counts as demonstrated with at least this many uses across at
-	// least this many files, so one copied snippet does not count.
+	// least this many files or functions (demonstrated).
 	minIdiomUses  = 3
 	minIdiomFiles = 2
 )
 
-// proficiency scores a language with enough owned code; it returns nil otherwise.
+// proficiency scores a language with owned code; it returns nil otherwise.
+// Any amount of code is rated: volume sets its confidence, never its score.
 // counts are findings per category weighted by their rules' eras. It also
 // returns each idiom's weight in the idiom range: 1 when demonstrated, and
 // otherwise its era share of the owned lines, so code from before an idiom
 // existed is not marked down for not using it.
 func proficiency(lr analysis.LanguageResult, counts map[rules.Category]float64) (*Proficiency, []IdiomResult, map[string]float64) {
 	var idioms []IdiomResult
-	catalog, applicable, weights := 0.0, map[rules.Category]bool{}, map[string]float64{}
+	catalog, shown, applicable, weights := 0.0, 0, map[rules.Category]bool{}, map[string]float64{}
 	for _, r := range rules.ForLanguage(lr.Language) {
-		if r.Category == rules.Idiom {
+		switch u := lr.Idioms[r.ID]; {
+		case r.Category == rules.Idiom:
 			weights[r.ID] = eraShare(r.Era, lr)
-			if u := lr.Idioms[r.ID]; u.Uses >= minIdiomUses && u.Files >= minIdiomFiles {
+			if demonstrated(u) {
 				idioms = append(idioms, IdiomResult{ID: r.ID, Title: r.Title, Uses: u.Uses, Files: u.Files, Why: r.Why})
 				weights[r.ID] = 1
+				shown++
 			}
 			catalog += weights[r.ID]
-		} else if _, scored := scoredCategories[r.Category]; scored {
+		case r.Category == rules.Construct:
+			// Constructs show capability, listed with the idioms, but stay
+			// out of the idiom range.
+			if demonstrated(u) {
+				idioms = append(idioms, IdiomResult{ID: r.ID, Title: r.Title, Uses: u.Uses, Files: u.Files, Why: r.Why})
+			}
+		default:
+			if _, scored := scoredCategories[r.Category]; !scored {
+				continue
+			}
 			applicable[r.Category] = true
 		}
 	}
 	// Ties keep the catalog's ID order, so the order is the same everywhere.
 	sort.SliceStable(idioms, func(i, j int) bool { return idioms[i].Uses > idioms[j].Uses })
-	if lr.OwnedLines < MinOwnedLines || catalog == 0 || len(applicable) == 0 {
+	if lr.OwnedLines < 1 || catalog == 0 || len(applicable) == 0 {
 		return nil, idioms, weights
 	}
 
@@ -99,21 +114,11 @@ func proficiency(lr analysis.LanguageResult, counts map[rules.Category]float64) 
 		p.Categories[string(c)] = CategoryScore{Score: int(math.Round(score)), Band: band(score), PerKLines: round2(rate)}
 		scores = append(scores, score)
 	}
-	rng := min(100, 100*float64(len(idioms))/catalog)
+	rng := min(100, 100*float64(shown)/catalog)
 	p.Score, p.Range = int(math.Round(blend(rng, scores))), int(math.Round(rng))
-	switch {
-	case lr.OwnedLines >= 10000:
-		p.Confidence = "high"
-	case lr.OwnedLines >= minJustifiedLines:
-		p.Confidence = "medium"
-	default:
-		// Too little code to justify more than Beginner, however clean: a
-		// small sample, often templates or tutorials, reads cleaner than a
-		// body of work.
-		p.Confidence = "low"
-		p.Score = min(p.Score, beginnerMax)
-	}
-	p.Level = level(p.Score)
+	p.Confidence = languageConfidence(lr)
+	p.Evidence = languageEvidence(lr)
+	p.Level = languageLevel(p.Evidence, p.Score)
 	return p, idioms, weights
 }
 
@@ -162,15 +167,9 @@ func band(score float64) string {
 	return "Focus area"
 }
 
-// level classifies a 0–100 rating. The same levels apply to every rating, so a
-// language, a framework, and a habit read the same way.
-// minJustifiedLines is how much owned code a language needs for a level
-// above Beginner; below it, the score is capped at beginnerMax.
-const (
-	minJustifiedLines = 2000
-	beginnerMax       = 39
-)
-
+// level classifies a 0–100 rating of experience or habit, such as a
+// framework or commit messages. A language's level comes from evidence
+// instead (languageLevel).
 func level(score int) string {
 	switch {
 	case score >= 85:

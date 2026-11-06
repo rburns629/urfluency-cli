@@ -102,3 +102,54 @@ func TestFirst(t *testing.T) {
 		}
 	}
 }
+
+func TestConstructs(t *testing.T) {
+	src := `package pipe
+
+import (
+	"iter"
+	"reflect"
+	"sync"
+	"sync/atomic"
+)
+
+type Cache struct {
+	mu   sync.RWMutex
+	once sync.Once
+	plain sync.Mutex
+	hits atomic.Int64
+}
+
+func (c *Cache) Hit() { atomic.AddInt64(nil, 1) }
+
+func Produce(out chan<- int, in <-chan int) {
+	for {
+		select {
+		case v := <-in:
+			out <- v
+		case out <- 0:
+		}
+	}
+}
+
+func Both(ch chan int) {}
+
+func All(xs []int) iter.Seq[int] {
+	return func(yield func(int) bool) {}
+}
+
+func Kind(v any) string { return reflect.TypeOf(v).Kind().String() }
+`
+	got := positives(t, Analyzer{}, "pipe.go", src)
+	// RWMutex, Once, the atomic type and the atomic call; not Mutex. A
+	// select over two channels and directional channels; not a plain chan.
+	want := map[string]int{"go.construct.sync": 4, "go.construct.channels": 2, "go.construct.iterators": 1, "go.construct.reflection": 1}
+	for rule, n := range want {
+		if got[rule] != n {
+			t.Errorf("%s = %d, want %d", rule, got[rule], n)
+		}
+		if r, ok := rules.Lookup(rule); !ok || r.Category != rules.Construct || r.Level() != rules.Advanced {
+			t.Errorf("%s is not an advanced construct", rule)
+		}
+	}
+}
