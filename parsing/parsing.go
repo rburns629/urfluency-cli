@@ -87,8 +87,9 @@ func Parse(g Grammar, src []byte) (*Tree, error) {
 		return nil, err
 	}
 	deadline := time.Now().Add(ParseBudget)
+	text := validUTF8(src)
 	t := p.ParseWithOptions(func(i int, _ ts.Point) []byte {
-		return chunk(src, i)
+		return chunk(text, i)
 	}, nil, &ts.ParseOptions{ProgressCallback: func(ts.ParseState) bool { return time.Now().After(deadline) }})
 	if t == nil {
 		return nil, ErrTooComplex // cancelled at the deadline
@@ -98,6 +99,31 @@ func Parse(g Grammar, src []byte) (*Tree, error) {
 		return nil, ErrTooComplex
 	}
 	return &Tree{tree: t, Source: src}, nil
+}
+
+// validUTF8 returns src with each byte that is not part of a valid UTF-8
+// character replaced by a space, or src itself when it is all valid. Long runs
+// of invalid bytes make some grammars' error recovery quadratic without
+// reaching the progress callback, so ParseBudget cannot stop them: found by
+// fuzzing (2026-11-06), 4,400 bytes of 0xb5 kept the Dart grammar busy for
+// 6.8 s against a 5 s budget, and the time grows with the square of the run.
+// A space is one byte, like what it replaces, so node offsets still index the
+// original source, which Tree keeps; the grammars read invalid bytes as
+// errors anyway, so no rule loses anything it could match.
+func validUTF8(src []byte) []byte {
+	if utf8.Valid(src) {
+		return src
+	}
+	out := make([]byte, len(src))
+	copy(out, src)
+	for i := 0; i < len(out); {
+		r, size := utf8.DecodeRune(out[i:])
+		if r == utf8.RuneError && size == 1 {
+			out[i] = ' '
+		}
+		i += size
+	}
+	return out
 }
 
 // readChunk bounds what one read callback returns. go-tree-sitter copies each
