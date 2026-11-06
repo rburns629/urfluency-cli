@@ -22,6 +22,7 @@ var (
 // visitIdioms finds the shell idioms that show fluency: each is a deliberate
 // choice that makes a script safer or clearer.
 func (c *checker) visitIdioms(n *ts.Node) bool {
+	c.visitConstructs(n)
 	switch n.Kind() {
 	case "command":
 		c.commandIdioms(n)

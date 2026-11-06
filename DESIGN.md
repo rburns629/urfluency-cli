@@ -382,6 +382,39 @@ is deliberately simple CRUD code, whose Intermediate the model keeps rather
 than be tuned to a label. The 12 new fundamental rules found nothing on
 `top` code after narrowing and 4 real mistakes in `learner` code.
 
+Every language was audited the same day. Each repository is judged in its
+main language, from 200 lines:
+
+| Language | Agree | Language | Agree |
+| --- | --- | --- | --- |
+| Python | 34 of 34 | C# | 23 of 23 |
+| Go | 23 of 24 | Java | 19 of 20 |
+| PHP | 21 of 23 | Ruby | 22 of 25 |
+| Kotlin | 18 of 20 | JavaScript | 11 of 14 |
+| TypeScript | 10 of 13 | C | 8 of 9 |
+| C++ | 6 of 7 | Rust, Swift, Dart, Shell, PowerShell | all |
+
+The disagreements are simple, well-known samples rated Intermediate (the
+Laravel skeleton, spring-petclinic, Android's sunflower, Express
+boilerplates, commander.js) and learner projects whose code shows advanced
+command (reflection in a Go API, metaprogramming in a Rails blog).
+Constructs were added where expert code showed command the idioms missed:
+Go channels, sync and atomics, iterators, and reflection; JavaScript's
+object model, generators, Proxy and Reflect; TypeScript's type-level
+programming; Ruby's metaprogramming; Shell's parameter expansion; PHP's
+traits, generators, and magic methods; C's function pointers, variadic
+functions, and memory layout; Java's generics, concurrency, reflection, and
+annotation types.
+
+A fundamental rule must not fire on deliberate expert code, so the audit
+moved to practice what the `top` projects use on purpose: Python's bare
+except, swallowed exceptions, and mutable defaults; JavaScript's loose
+equality and empty catch; Go's empty switch case; Python's loop else.
+Beginner rests on fundamental rules for Python (13), Go (8), JavaScript
+and TypeScript (7), and Java (1). The other languages have none yet, so
+their code is never rated Beginner: their fundamental rules are the next
+step.
+
 ### Summary and experience ratings
 
 The final result is `combined`: all work with and without Git, merged at the

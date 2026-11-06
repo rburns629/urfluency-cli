@@ -23,6 +23,7 @@ var (
 // visitIdioms finds the Ruby idioms that show fluency: each is a deliberate
 // choice the language does not force.
 func (c *checker) visitIdioms(n *ts.Node) bool {
+	c.visitConstructs(n)
 	switch n.Kind() {
 	case "program":
 		if c.frozenStringLiterals(n) {

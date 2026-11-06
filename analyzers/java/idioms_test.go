@@ -79,8 +79,8 @@ final class Circle implements Shape {
 		}
 	}
 	for rule := range got {
-		if r, ok := rules.Lookup(rule); !ok || r.Category != rules.Idiom {
-			t.Errorf("%s is not an idiom in the catalog", rule)
+		if r, ok := rules.Lookup(rule); !ok || !r.Category.Positive() {
+			t.Errorf("%s is not an idiom or construct in the catalog", rule)
 		}
 	}
 	for _, r := range rules.ForLanguage("java") {

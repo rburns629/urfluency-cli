@@ -16,6 +16,7 @@ func (c *checker) idiom(rule string, n *ts.Node) {
 // visitIdioms finds the modern PHP features that show fluency: each is a
 // deliberate choice that older PHP code and the language's defaults do not make.
 func (c *checker) visitIdioms(n *ts.Node) bool {
+	c.visitConstructs(n)
 	switch n.Kind() {
 	case "declare_statement":
 		if c.declaresStrictTypes(n) {

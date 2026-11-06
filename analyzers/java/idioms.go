@@ -24,6 +24,7 @@ var (
 // visitIdioms finds the modern Java idioms that show fluency: each is a
 // deliberate choice the language does not force.
 func (c *checker) visitIdioms(n *ts.Node) bool {
+	c.visitConstructs(n)
 	switch n.Kind() {
 	case "try_with_resources_statement":
 		c.idiom("java.idiom.try-with-resources", n)
