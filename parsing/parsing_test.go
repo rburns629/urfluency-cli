@@ -1,8 +1,10 @@
 package parsing
 
 import (
+	"bytes"
 	"strings"
 	"testing"
+	"time"
 	"unicode/utf8"
 
 	ts "github.com/tree-sitter/go-tree-sitter"
@@ -50,5 +52,34 @@ func TestChunkedReadsParseLikeWholeFiles(t *testing.T) {
 	defer tree.Close()
 	if tree.Root().HasError() || tree.Root().EndByte() != uint(len(src)) {
 		t.Errorf("chunked parse: error %v, end %d of %d", tree.Root().HasError(), tree.Root().EndByte(), len(src))
+	}
+}
+
+// Invalid UTF-8 is replaced byte for byte before parsing, so offsets still
+// index the original source, and a long run of it parses quickly: fuzzing
+// found 4,400 bytes of 0xb5 kept the Dart grammar busy for 6.8 s.
+func TestInvalidUTF8ParsesQuickly(t *testing.T) {
+	valid := []byte("var s = 'µ';\n")
+	if got := validUTF8(valid); &got[0] != &valid[0] {
+		t.Error("valid source was copied")
+	}
+	mixed := []byte("a\xb5b\xe2\x82c€")
+	if got := string(validUTF8(mixed)); got != "a b  c€" || len(got) != len(mixed) {
+		t.Errorf("validUTF8 = %q, want %q", got, "a b  c€")
+	}
+	src := append([]byte("void main() {}\n"), bytes.Repeat([]byte{0xb5}, 20000)...)
+	for _, g := range []Grammar{Dart, Python, Swift, Kotlin, PHP} {
+		start := time.Now()
+		tree, err := Parse(g, src)
+		if err != nil {
+			t.Fatal(err)
+		}
+		if d := time.Since(start); d > time.Second {
+			t.Errorf("parse took %v", d)
+		}
+		if !bytes.Equal(tree.Source, src) {
+			t.Error("the tree's source is not the original")
+		}
+		tree.Close()
 	}
 }
