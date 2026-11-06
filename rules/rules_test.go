@@ -37,3 +37,35 @@ func TestStandards(t *testing.T) {
 		}
 	}
 }
+
+func TestEras(t *testing.T) {
+	e := Era{Introduced: 2015, Established: 2020}
+	for _, c := range []struct {
+		year int
+		want float64
+	}{{0, 1}, {2014, 0}, {2015, 0.5}, {2019, 0.5}, {2020, 1}, {2026, 1}} {
+		if got := e.Weight(c.year); got != c.want {
+			t.Errorf("Weight(%d) = %v, want %v", c.year, got, c.want)
+		}
+	}
+	if got := (Era{}).Weight(2001); got != 1 {
+		t.Errorf("a rule without an era weighs %v, want 1", got)
+	}
+	// Every era names a rule in the catalog, in order.
+	for id, e := range eras {
+		r, ok := Lookup(id)
+		if !ok {
+			t.Errorf("era for unknown rule %s", id)
+			continue
+		}
+		if r.Era != e || e.Introduced > e.Established || e.Introduced < 2000 {
+			t.Errorf("%s: era %+v, catalog %+v", id, e, r.Era)
+		}
+	}
+	// Practices that were never good get no era.
+	for _, id := range []string{"py.bare-except", "py.mutable-default-argument"} {
+		if r, _ := Lookup(id); r.Era != (Era{}) {
+			t.Errorf("%s has era %+v, want none", id, r.Era)
+		}
+	}
+}

@@ -146,6 +146,12 @@ type Language struct {
 	// Authorship splits the findings rate between AI-assisted and other owned
 	// lines, so readers can see whose code a result reflects.
 	Authorship *Authorship `json:"authorship,omitempty"`
+
+	// weighted counts findings by category with their rules' era weights,
+	// which the score uses; idiomWeights are each idiom's weight in the
+	// idiom range (see eraShare).
+	weighted     map[string]float64
+	idiomWeights map[string]float64
 }
 
 // Authorship compares AI-assisted owned lines with the rest.
@@ -170,6 +176,12 @@ type RuleResult struct {
 	Locations []string `json:"locations,omitempty"`
 	// AssistedCount is how many of Count are on AI-assisted lines.
 	AssistedCount int `json:"ai_assisted_count"`
+	// Legacy is how many of Count are on lines from before the rule's
+	// practice was established, which count for less (DESIGN.md, "Era-aware
+	// findings"). They are still listed: old code is still worth updating.
+	Legacy int `json:"legacy,omitempty"`
+	// weighted is Count with each finding's era weight.
+	weighted float64
 	// Standard links the clean-agent-code document behind the rule, if any.
 	Standard string `json:"standard,omitempty"`
 }
@@ -352,6 +364,7 @@ func buildLanguage(lr analysis.LanguageResult, withLocations bool) Language {
 		OwnedLines:       lr.OwnedLines,
 		Sufficient:       lr.OwnedLines >= MinOwnedLines,
 		Categories:       map[string]int{},
+		weighted:         map[string]float64{},
 		Weaknesses:       []RuleResult{},
 		Strengths:        []string{},
 		Focus:            []string{},
@@ -382,6 +395,12 @@ func buildLanguage(lr analysis.LanguageResult, withLocations bool) Language {
 		}
 		rr.Count++
 		lang.Categories[rr.Category]++
+		w := rule.Era.Weight(f.Year)
+		rr.weighted += w
+		lang.weighted[rr.Category] += w
+		if w < 1 {
+			rr.Legacy++
+		}
 		if withLocations {
 			rr.Locations = append(rr.Locations, fmt.Sprintf("%s:%d", f.Path, f.Line))
 		}
@@ -429,12 +448,12 @@ func buildLanguage(lr analysis.LanguageResult, withLocations bool) Language {
 		}
 	}
 	if !lang.Scanner {
-		counts := map[rules.Category]int{}
-		for c, n := range lang.Categories {
+		counts := map[rules.Category]float64{}
+		for c, n := range lang.weighted {
 			counts[rules.Category(c)] = n
 		}
 		var idioms []IdiomResult
-		lang.Proficiency, idioms = proficiency(lr, counts)
+		lang.Proficiency, idioms, lang.idiomWeights = proficiency(lr, counts)
 		lang.Idioms = append(lang.Idioms, idioms...)
 	}
 	return lang
@@ -617,7 +636,7 @@ func writeLanguage(b *strings.Builder, l Language) {
 			if l.Scanner {
 				fmt.Fprintf(b, "    - %s [%s]: %d\n", w.Title, w.Category, w.Count)
 			} else {
-				fmt.Fprintf(b, "    - %s [%s]: %d (%.2f per 1,000 lines)\n", w.Title, w.Category, w.Count, w.PerKLines)
+				fmt.Fprintf(b, "    - %s [%s]: %d (%.2f per 1,000 lines)%s\n", w.Title, w.Category, w.Count, w.PerKLines, legacyNote(w))
 			}
 			fmt.Fprintf(b, "      Why: %s\n      Focus: %s\n", w.Why, w.Focus)
 			if w.Standard != "" {
@@ -643,3 +662,13 @@ func shortHash(h string) string {
 func round2(v float64) float64 { return float64(int(v*100+0.5)) / 100 }
 
 func round4(v float64) float64 { return float64(int(v*10000+0.5)) / 10000 }
+
+// legacyNote tells how many of a rule's findings count for less because their
+// lines predate the practice.
+func legacyNote(w RuleResult) string {
+	if w.Legacy == 0 {
+		return ""
+	}
+	r, _ := rules.Lookup(w.ID)
+	return fmt.Sprintf("; %d written before it was standard in %d, counted for less", w.Legacy, r.Era.Established)
+}

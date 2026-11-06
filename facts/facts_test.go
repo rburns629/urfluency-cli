@@ -6,6 +6,7 @@ import (
 	"encoding/json"
 	"os"
 	"path/filepath"
+	"reflect"
 	"strings"
 	"testing"
 	"time"
@@ -195,5 +196,40 @@ func TestFactsCarryEvidence(t *testing.T) {
 		if (l.Evidence == nil) != (got.Languages[i].Evidence == nil) || (l.Evidence != nil && *l.Evidence != *got.Languages[i].Evidence) {
 			t.Errorf("%s: evidence %+v came back as %+v", l.Language, l.Evidence, got.Languages[i].Evidence)
 		}
+	}
+}
+
+// Years survive the round trip, so era weighting scores facts as it scored
+// the scan; claims beyond the totals are ignored.
+func TestFactsCarryYears(t *testing.T) {
+	res := analysis.Result{Repos: 1, Languages: []analysis.LanguageResult{{Language: "python", OwnedLines: 100, LinesByYear: map[int]int{2016: 40, 2024: 50},
+		Findings: []analysis.Finding{{Rule: "py.bare-except", Path: "a.py", Line: 3, Year: 2016}, {Rule: "py.bare-except", Path: "b.py", Line: 9}, {Rule: "py.unannotated-public-function", Path: "a.py", Line: 1, Year: 2024}}}}}
+	data, err := json.Marshal(facts.New(res, analysis.Result{}, nil))
+	if err != nil {
+		t.Fatal(err)
+	}
+	if bytes.Contains(data, []byte("a.py")) {
+		t.Fatalf("facts carry a path: %s", data)
+	}
+	var back facts.Facts
+	if err := json.Unmarshal(data, &back); err != nil {
+		t.Fatal(err)
+	}
+	got := back.Git.Result().Languages[0]
+	years := map[string][]int{}
+	for _, f := range got.Findings {
+		years[f.Rule] = append(years[f.Rule], f.Year)
+	}
+	if !reflect.DeepEqual(years, map[string][]int{"py.bare-except": {2016, 0}, "py.unannotated-public-function": {2024}}) ||
+		!reflect.DeepEqual(got.LinesByYear, res.Languages[0].LinesByYear) {
+		t.Errorf("years came back as %v, lines %v", years, got.LinesByYear)
+	}
+
+	// An upload claiming more dated findings than it has keeps its total.
+	l := facts.Language{Name: "python", OwnedLines: 10, FindingsByRule: map[string]int{"py.bare-except": 1},
+		FindingsByRuleYear: map[string]map[string]int{"py.bare-except": {"2010": 5, "not a year": 2}}}
+	lr := facts.Scan{Languages: []facts.Language{l}}.Result().Languages[0]
+	if len(lr.Findings) != 1 || lr.Findings[0].Year != 2010 {
+		t.Errorf("findings = %+v, want one from 2010", lr.Findings)
 	}
 }

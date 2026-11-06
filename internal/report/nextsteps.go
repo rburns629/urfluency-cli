@@ -66,15 +66,24 @@ func languageSteps(lang Language) []Step {
 	if p == nil || lang.OwnedLines == 0 {
 		return nil
 	}
-	catalog := 0
+	catalog, size := 0.0, 0
 	shown := map[string]bool{}
 	for _, i := range lang.Idioms {
 		shown[i.ID] = true
 	}
+	// Each idiom weighs as the score weighed it; a language read back from
+	// JSON has no weights, and each idiom weighs 1.
+	weight := func(id string) float64 {
+		if w, ok := lang.idiomWeights[id]; ok {
+			return w
+		}
+		return 1
+	}
 	var missing []rules.Rule
 	for _, r := range rules.ForLanguage(lang.Language) {
 		if r.Category == rules.Idiom {
-			catalog++
+			catalog += weight(r.ID)
+			size++
 			if !shown[r.ID] {
 				missing = append(missing, r)
 			}
@@ -83,13 +92,21 @@ func languageSteps(lang Language) []Step {
 	if catalog == 0 {
 		return nil
 	}
-	score := func(counts map[string]int, idioms int) int {
+	// Findings count with their era weights, as in the score.
+	weighted := lang.weighted
+	if weighted == nil {
+		weighted = map[string]float64{}
+		for c, n := range lang.Categories {
+			weighted[c] = float64(n)
+		}
+	}
+	score := func(counts map[string]float64, idioms int, catalog float64) int {
 		kLines := float64(lang.OwnedLines) / 1000
 		var scores []float64
 		for c := range p.Categories {
-			scores = append(scores, categoryScore(rules.Category(c), float64(counts[c])/kLines))
+			scores = append(scores, categoryScore(rules.Category(c), counts[c]/kLines))
 		}
-		s := blend(100*float64(idioms)/float64(catalog), scores)
+		s := blend(min(100, 100*float64(idioms)/catalog), scores)
 		if p.Confidence == "low" {
 			s = min(s, beginnerMax)
 		}
@@ -97,19 +114,19 @@ func languageSteps(lang Language) []Step {
 	}
 	// Gains are measured from the formula's own baseline and applied to the
 	// published score, so rounding cannot invent or hide a point.
-	base := score(lang.Categories, len(lang.Idioms))
+	base := score(weighted, len(lang.Idioms), catalog)
 	name := displayLanguage(lang.Language)
 	var out []Step
 	for _, w := range lang.Weaknesses {
 		if _, scored := p.Categories[w.Category]; !scored {
 			continue
 		}
-		counts := map[string]int{}
-		for c, n := range lang.Categories {
+		counts := map[string]float64{}
+		for c, n := range weighted {
 			counts[c] = n
 		}
-		counts[w.Category] -= w.Count
-		if gain := score(counts, len(lang.Idioms)) - base; gain >= minStepGain {
+		counts[w.Category] -= weightedCount(w)
+		if gain := score(counts, len(lang.Idioms), catalog) - base; gain >= minStepGain {
 			out = append(out, Step{Area: "language", Name: lang.Language, Kind: "fix", Rule: w.ID,
 				Action: fmt.Sprintf("%s: %s", w.Title, w.Focus),
 				Detail: fmt.Sprintf("%s in %s %s lines", count(w.Count, "finding"), thousands(lang.OwnedLines), name),
@@ -117,7 +134,9 @@ func languageSteps(lang Language) []Step {
 		}
 	}
 	if len(missing) > 0 {
-		if gain := score(lang.Categories, len(lang.Idioms)+1) - base; gain >= minStepGain {
+		// Demonstrating an idiom also gives it full weight in the range.
+		next := catalog + 1 - weight(missing[0].ID)
+		if gain := score(weighted, len(lang.Idioms)+1, next) - base; gain >= minStepGain {
 			for _, r := range missing[:min(2, len(missing))] {
 				action := r.Focus
 				if action == "" {
@@ -126,7 +145,7 @@ func languageSteps(lang Language) []Step {
 				out = append(out, Step{Area: "language", Name: lang.Language, Kind: "idiom", Rule: r.ID,
 					Action: fmt.Sprintf("Use %s where it fits: %s", lowerFirst(r.Title), action),
 					Detail: fmt.Sprintf("an idiom counts once used %d times across %d files; %d of %d %s idioms shown so far",
-						minIdiomUses, minIdiomFiles, len(lang.Idioms), catalog, name),
+						minIdiomUses, minIdiomFiles, len(lang.Idioms), size, name),
 					From: p.Score, To: min(100, p.Score+gain)})
 			}
 		}
@@ -211,4 +230,13 @@ func lowerFirst(s string) string {
 		return s
 	}
 	return strings.ToLower(s[:1]) + s[1:]
+}
+
+// weightedCount is a rule's findings with their era weights, as the score
+// counted them; a rule read back from JSON has only its count.
+func weightedCount(w RuleResult) float64 {
+	if w.weighted == 0 && w.Legacy == 0 {
+		return float64(w.Count)
+	}
+	return w.weighted
 }

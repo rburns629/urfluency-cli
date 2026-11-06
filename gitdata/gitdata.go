@@ -235,15 +235,22 @@ func (r Repo) Show(ctx context.Context, rev, path string) ([]byte, error) {
 // email is in emails (or any, for Everyone), and whose author time is not before since, to the commit
 // that last changed them.
 func (r Repo) OwnedLines(ctx context.Context, rev, path string, emails []string, since time.Time) (map[int]string, error) {
+	owned, _, err := r.OwnedLinesDated(ctx, rev, path, emails, since)
+	return owned, err
+}
+
+// OwnedLinesDated is OwnedLines, also returning the author time of each commit
+// that owns a line.
+func (r Repo) OwnedLinesDated(ctx context.Context, rev, path string, emails []string, since time.Time) (map[int]string, map[string]time.Time, error) {
 	out, err := r.git(ctx, "blame", "--line-porcelain", "-w", "-M", "-C", "--no-textconv", rev, "--", path)
 	if err != nil {
-		return nil, err
+		return nil, nil, err
 	}
 	all, wanted := IsEveryone(emails), map[string]bool{}
 	for _, e := range emails {
 		wanted[strings.ToLower(e)] = true
 	}
-	owned := map[int]string{}
+	owned, dates := map[int]string{}, map[string]time.Time{}
 	var line int
 	var commit, email string
 	var authored time.Time
@@ -255,13 +262,14 @@ func (r Repo) OwnedLines(ctx context.Context, rev, path string, emails []string,
 		case strings.HasPrefix(text, "\t"):
 			if (all || wanted[email]) && !authored.Before(since) {
 				owned[line] = commit
+				dates[commit] = authored
 			}
 		case strings.HasPrefix(text, "author-mail "):
 			email = strings.ToLower(strings.Trim(strings.TrimPrefix(text, "author-mail "), "<>"))
 		case strings.HasPrefix(text, "author-time "):
 			secs, err := strconv.ParseInt(strings.TrimPrefix(text, "author-time "), 10, 64)
 			if err != nil {
-				return nil, fmt.Errorf("parse blame author-time: %w", err)
+				return nil, nil, fmt.Errorf("parse blame author-time: %w", err)
 			}
 			authored = time.Unix(secs, 0)
 		default:
@@ -271,16 +279,16 @@ func (r Repo) OwnedLines(ctx context.Context, rev, path string, emails []string,
 			if len(fields) >= 3 && (len(fields[0]) == 40 || len(fields[0]) == 64) && isHex(fields[0]) {
 				n, err := strconv.Atoi(fields[2])
 				if err != nil {
-					return nil, fmt.Errorf("parse blame line number: %w", err)
+					return nil, nil, fmt.Errorf("parse blame line number: %w", err)
 				}
 				commit, line = fields[0], n
 			}
 		}
 	}
 	if err := scanner.Err(); err != nil {
-		return nil, fmt.Errorf("read blame output: %w", err)
+		return nil, nil, fmt.Errorf("read blame output: %w", err)
 	}
-	return owned, nil
+	return owned, dates, nil
 }
 
 // Everyone, passed as the emails, selects every author's work: for scoring a

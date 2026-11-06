@@ -12,7 +12,7 @@ import (
 
 // ProficiencyModel versions the scoring below. Its constants are reasoned
 // starting points, not yet calibrated against outcomes (see DESIGN.md).
-const ProficiencyModel = "local-0.3-uncalibrated"
+const ProficiencyModel = "local-0.4-uncalibrated"
 
 // Proficiency rates one language from the user's own code: how much of the
 // language's idiom range they use, and how cleanly they write it.
@@ -65,15 +65,21 @@ const (
 )
 
 // proficiency scores a language with enough owned code; it returns nil otherwise.
-func proficiency(lr analysis.LanguageResult, counts map[rules.Category]int) (*Proficiency, []IdiomResult) {
+// counts are findings per category weighted by their rules' eras. It also
+// returns each idiom's weight in the idiom range: 1 when demonstrated, and
+// otherwise its era share of the owned lines, so code from before an idiom
+// existed is not marked down for not using it.
+func proficiency(lr analysis.LanguageResult, counts map[rules.Category]float64) (*Proficiency, []IdiomResult, map[string]float64) {
 	var idioms []IdiomResult
-	catalog, applicable := 0, map[rules.Category]bool{}
+	catalog, applicable, weights := 0.0, map[rules.Category]bool{}, map[string]float64{}
 	for _, r := range rules.ForLanguage(lr.Language) {
 		if r.Category == rules.Idiom {
-			catalog++
+			weights[r.ID] = eraShare(r.Era, lr)
 			if u := lr.Idioms[r.ID]; u.Uses >= minIdiomUses && u.Files >= minIdiomFiles {
 				idioms = append(idioms, IdiomResult{ID: r.ID, Title: r.Title, Uses: u.Uses, Files: u.Files, Why: r.Why})
+				weights[r.ID] = 1
 			}
+			catalog += weights[r.ID]
 		} else if _, scored := scoredCategories[r.Category]; scored {
 			applicable[r.Category] = true
 		}
@@ -81,19 +87,19 @@ func proficiency(lr analysis.LanguageResult, counts map[rules.Category]int) (*Pr
 	// Ties keep the catalog's ID order, so the order is the same everywhere.
 	sort.SliceStable(idioms, func(i, j int) bool { return idioms[i].Uses > idioms[j].Uses })
 	if lr.OwnedLines < MinOwnedLines || catalog == 0 || len(applicable) == 0 {
-		return nil, idioms
+		return nil, idioms, weights
 	}
 
 	p := &Proficiency{Categories: map[string]CategoryScore{}, Model: ProficiencyModel}
 	kLines := float64(lr.OwnedLines) / 1000
 	var scores []float64
 	for c := range applicable {
-		rate := float64(counts[c]) / kLines
+		rate := counts[c] / kLines
 		score := categoryScore(c, rate)
 		p.Categories[string(c)] = CategoryScore{Score: int(math.Round(score)), Band: band(score), PerKLines: round2(rate)}
 		scores = append(scores, score)
 	}
-	rng := 100 * float64(len(idioms)) / float64(catalog)
+	rng := min(100, 100*float64(len(idioms))/catalog)
 	p.Score, p.Range = int(math.Round(blend(rng, scores))), int(math.Round(rng))
 	switch {
 	case lr.OwnedLines >= 10000:
@@ -108,7 +114,22 @@ func proficiency(lr analysis.LanguageResult, counts map[rules.Category]int) (*Pr
 		p.Score = min(p.Score, beginnerMax)
 	}
 	p.Level = level(p.Score)
-	return p, idioms
+	return p, idioms, weights
+}
+
+// eraShare is the share of a language's owned lines on which a practice of
+// era e would count: lines without a year in full, dated lines by e.Weight.
+func eraShare(e rules.Era, lr analysis.LanguageResult) float64 {
+	if e == (rules.Era{}) || lr.OwnedLines == 0 {
+		return 1
+	}
+	undated, sum := lr.OwnedLines, 0.0
+	for y, n := range lr.LinesByYear {
+		undated -= n
+		sum += float64(n) * e.Weight(y)
+	}
+	// Capped, for facts whose years claim more lines than the language has.
+	return min(1, (float64(max(undated, 0))+sum)/float64(lr.OwnedLines))
 }
 
 // categoryScore rates one category from its findings per 1,000 lines: 100

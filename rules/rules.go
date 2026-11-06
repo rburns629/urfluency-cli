@@ -4,7 +4,7 @@ package rules
 import "sort"
 
 // Version identifies the catalog; it changes whenever rules are added or redefined.
-const Version = "0.14"
+const Version = "0.15"
 
 // Category groups rules into the metrics users see.
 type Category string
@@ -30,6 +30,9 @@ type Rule struct {
 	Title     string
 	Why       string
 	Focus     string
+	// Era is when the practice became possible and expected; zero for most
+	// rules, which flag what was never good practice.
+	Era Era
 }
 
 var (
@@ -44,6 +47,9 @@ func Register(rs ...Rule) {
 		if _, exists := catalog[r.ID]; exists {
 			duplicates = append(duplicates, r.ID)
 			continue
+		}
+		if e, ok := eras[r.ID]; ok && r.Era == (Era{}) {
+			r.Era = e
 		}
 		catalog[r.ID] = r
 	}

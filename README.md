@@ -282,8 +282,11 @@ lines: the share of the language's idioms you use well, such as error wrapping i
 Go, dataclasses and generators in Python, or type guards in TypeScript, and how
 cleanly you write it in each category (security, type safety, clean code, language
 proficiency). A weak category caps the score, so strengths cannot hide it. The
-report lists the idioms you demonstrate under **Shows**. The model (version
-`local-0.3-uncalibrated`) is documented in DESIGN.md. It is not yet calibrated against
+report lists the idioms you demonstrate under **Shows**. Findings on lines
+written before a practice was established count for less, and not at all
+before it existed, so old code is judged by the standards of its time; each
+weakness says how many of its findings are legacy. The model (version
+`local-0.4-uncalibrated`) is documented in DESIGN.md. It is not yet calibrated against
 outcomes, and every rating names the model version that produced it.
 
 ### Local estimate and official score

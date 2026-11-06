@@ -219,14 +219,87 @@ windows, and web host projects (kept for plugin packages, whose native code is
 their own) and the unchanged starter `lib/main.dart` and `test/widget_test.dart`;
 in a Capacitor project, android and ios; and generated plugin registrants.
 
-The model is versioned (`proficiency.model`, now `local-0.3-uncalibrated`; 0.2 moved to
-the four levels above, 0.3 added the Beginner cap). Its weights
+The model is versioned (`proficiency.model`, now `local-0.4-uncalibrated`; 0.2 moved to
+the four levels above, 0.3 added the Beginner cap, 0.4 weighs findings and
+idioms by rule era, below). Its weights
 and `k` values are reasoned starting points. Before scores are uploaded or shown
 publicly they are calibrated against outcomes: per language, scores should
 predict durability (how often the user's lines later need fixes), and once uploads
 exist, the level bands are set from the distribution across users. Each change to
 the model changes its version, and trends compare only results with the same
 version.
+
+### Era-aware findings (built 2026-11-06)
+
+A rule written today judges code by today's standards. Code written before a
+practice existed, or while it was still optional, is marked down for not
+following it: Python from 2016 for missing type annotations, Go from 2019 for
+not using generics, pandas code from 2021 for methods 2.0 later removed. The
+score then measures when the code was written as much as how well. Raised on
+2026-11-06 from the author's own Python: 81,666 owned lines scored 64
+all-time and 68 for the last year.
+
+**Rule eras.** A rule can carry an era, two years in the catalog:
+`Introduced`, when following the practice became possible, and `Established`,
+when it became the expected norm. Most rules carry none, because what they
+flag was never good practice: a handler that only re-raises, a bare `except`,
+a mutable default argument, a dataclass without fields. PEP 557 (2017) made
+static type checkers a main design goal of dataclasses, but through fields,
+which it defines as annotated class variables; it ignores the annotations at
+runtime and says nothing of speed. A dataclass with no annotated fields and
+its own `__init__` gives a checker nothing to check and the decorator nothing
+to generate, in 2018 as now. An era is given only with
+a cited source, such as the release that added the feature or the one that
+removed an API, and changes the catalog version.
+
+**Weighting.** Blame already gives each owned line its commit; the line's year
+is that commit's author time. A finding counts toward its category with weight
+0 on lines from before `Introduced` (following the practice was not possible),
+0.5 from `Introduced` until `Established` (possible but optional), and 1 after.
+Category rates still divide by all owned lines. The idiom range treats idioms
+the same way: an idiom's weight in the denominator is the share of the
+language's owned lines written after its `Introduced` year, so code from
+before f-strings is not marked down for not using them, while a demonstrated
+idiom always counts in full. Lines without a date, in folders without Git and
+lines left unblamed, weigh 1, as now.
+
+**Backdating.** Author time is set by whoever commits, so relief must not be
+free to claim. A commit is untrusted, and all its lines weigh 1, when its
+time is in the future or before 2005, or when a line it owns uses an idiom or
+syntax from after the commit's year (an f-string dated 2015). Reports count
+the findings that era weighting reduced, so the relief is visible on the
+profile as well as locally.
+
+**Reports and uploads.** Each weakness shows its legacy count beside its
+total ("798 (9.77 per 1,000 lines); 412 written before it was standard in
+2020, counted for less"), and the JSON adds `legacy` per weakness. Findings are still
+listed, because old code is still worth modernizing; only the score changes.
+Facts gain, per language, `owned_lines_by_year` and `findings_by_rule_year`
+(year to count, aggregated across repositories like every other count, so
+nothing identifies a repository). The official model applies its own eras to
+these and can refine them without a CLI release. Uploads from CLIs without
+the fields are scored without relief. The local model becomes `local-0.4`,
+the official `official-5`.
+
+**Initial eras.** Python first, then each language audited the same way:
+
+| Rule | Introduced | Established | Source |
+| --- | --- | --- | --- |
+| `py.unannotated-public-function`, `py.idiom.type-hints`, `py.type-ignore` | 2015 | 2020 | PEP 484 in Python 3.5; Python 2, which cannot parse annotations, reached end of life in January 2020 |
+| `py.idiom.f-string` | 2017 | 2019 | PEP 498 in Python 3.6 (December 2016) |
+| `py.idiom.structured-data` | 2018 | 2020 | PEP 557 dataclasses in Python 3.7 |
+| `py.idiom.async` | 2015 | 2018 | PEP 492 in Python 3.5; asyncio no longer provisional from 3.6 |
+| `py.idiom.pathlib` | 2014 | 2019 | Python 3.4; `os.PathLike` support across the standard library in 3.6 |
+| `py.idiom.protocol` | 2019 | 2021 | PEP 544 in Python 3.8 |
+| `py.pandas-removed-api` | 2022 | 2023 | `DataFrame.append` deprecated in pandas 1.4 and `iteritems` in 1.5 (2022); removed in 2.0 (April 2023) |
+| `go.idiom.error-wrapping`, `go.idiom.error-inspection` | 2019 | 2020 | Go 1.13 |
+| `go.idiom.generics` | 2022 | 2023 | Go 1.18 |
+
+**Limits.** Blame dates a line by its last change, so a reformat moves old
+lines to the reformat's year and removes their relief; repositories that list
+such commits in `.git-blame-ignore-revs` get them skipped, as `git blame
+--ignore-revs-file` does. Years are coarse: a line from the month a feature
+shipped counts as if from all of that year.
 
 ### Summary and experience ratings
 
