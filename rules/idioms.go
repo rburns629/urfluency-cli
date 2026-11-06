@@ -24,6 +24,10 @@ func init() {
 		idiom("go.idiom.generics", "Type parameters", "Writes reusable, type-safe code without interface{} and assertions.", "go"),
 		idiom("go.idiom.small-interface", "Small interfaces", "Defines interfaces of one to three methods, which keep dependencies narrow.", "go"),
 		idiom("go.idiom.table-driven-test", "Table-driven subtests", "Covers many cases in one readable test with t.Run per case.", "go"),
+		construct("go.construct.channels", "Channel select and directional channels", "Coordinates goroutines with select over several channels, and states which way each channel flows.", "go"),
+		construct("go.construct.sync", "Atomics and advanced sync", "Shares state with sync/atomic, sync.Once, sync.Pool, sync.RWMutex, sync.Cond, or sync.Map.", "go"),
+		construct("go.construct.iterators", "Iterators", "Writes iter.Seq and iter.Seq2 functions that range loops can consume.", "go"),
+		construct("go.construct.reflection", "Reflection", "Inspects and builds values at run time with the reflect package.", "go"),
 
 		idiom("py.idiom.type-hints", "Return type annotations", "Lets type checkers and readers see what functions return.", "python"),
 		idiom("py.idiom.structured-data", "Dataclasses and typed models", "Uses dataclasses, Pydantic, TypedDict, or NamedTuple instead of loose dicts.", "python"),

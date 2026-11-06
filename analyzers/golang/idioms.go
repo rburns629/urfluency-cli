@@ -24,6 +24,12 @@ func (c *checker) idioms() {
 			if n.Type.TypeParams != nil {
 				c.idiom("go.idiom.generics", n.Pos())
 			}
+			if c.returnsIterator(n.Type) {
+				c.idiom("go.construct.iterators", n.Pos())
+			}
+			if directional(n.Type) {
+				c.idiom("go.construct.channels", n.Pos())
+			}
 			if params := n.Type.Params.List; len(params) > 0 && c.isContext(params[0].Type) {
 				c.idiom("go.idiom.context-first", n.Pos())
 			}
@@ -49,6 +55,18 @@ func (c *checker) idioms() {
 			case "errgroup.WithContext", "semaphore.NewWeighted":
 				c.idiom("go.idiom.structured-concurrency", n.Pos())
 			}
+		case *ast.SelectorExpr:
+			// Each use of a package's name once, whether called or as a type:
+			// atomic.AddInt64 and atomic.Int64, reflect.TypeOf and
+			// reflect.Value, and sync.Once, sync.Pool, and the like.
+			switch path := c.importPath(n); {
+			case path == "sync/atomic":
+				c.idiom("go.construct.sync", n.Pos())
+			case path == "sync" && advancedSync[n.Sel.Name]:
+				c.idiom("go.construct.sync", n.Pos())
+			case path == "reflect":
+				c.idiom("go.construct.reflection", n.Pos())
+			}
 		case *ast.DeferStmt:
 			if sel, ok := n.Call.Fun.(*ast.SelectorExpr); ok {
 				switch sel.Sel.Name {
@@ -59,11 +77,21 @@ func (c *checker) idioms() {
 				c.idiom("go.idiom.defer-cleanup", n.Pos())
 			}
 		case *ast.SelectStmt:
+			cases := 0
+			for _, s := range n.Body.List {
+				if cc, ok := s.(*ast.CommClause); ok && cc.Comm != nil {
+					cases++
+				}
+			}
 			for _, s := range n.Body.List {
 				if cc, ok := s.(*ast.CommClause); ok && receivesDone(cc.Comm) {
 					c.idiom("go.idiom.cancellation", n.Pos())
+					cases-- // waiting for cancellation is its own idiom
 					break
 				}
+			}
+			if cases >= 2 {
+				c.idiom("go.construct.channels", n.Pos())
 			}
 		case *ast.RangeStmt:
 			if isTest && containsSubtest(n.Body) {
@@ -132,4 +160,57 @@ func containsSubtest(body *ast.BlockStmt) bool {
 		return !found
 	})
 	return found
+}
+
+// advancedSync are the sync types beyond Mutex and WaitGroup, which every
+// concurrent program uses.
+var advancedSync = map[string]bool{"Once": true, "OnceFunc": true, "OnceValue": true, "Pool": true, "RWMutex": true, "Cond": true, "Map": true}
+
+// importPath returns the import path of the package a selector names, as
+// "sync/atomic" for atomic.AddInt64, or "".
+func (c *checker) importPath(e ast.Expr) string {
+	sel, ok := e.(*ast.SelectorExpr)
+	if !ok {
+		return ""
+	}
+	pkg, ok := sel.X.(*ast.Ident)
+	if !ok {
+		return ""
+	}
+	return c.imports[pkg.Name]
+}
+
+// returnsIterator reports whether a function returns an iter.Seq or Seq2.
+func (c *checker) returnsIterator(ft *ast.FuncType) bool {
+	if ft.Results == nil {
+		return false
+	}
+	for _, r := range ft.Results.List {
+		t := r.Type
+		if ix, ok := t.(*ast.IndexExpr); ok {
+			t = ix.X
+		} else if ix, ok := t.(*ast.IndexListExpr); ok {
+			t = ix.X
+		}
+		if c.importPath(t) == "iter" {
+			return true
+		}
+	}
+	return false
+}
+
+// directional reports whether a function takes or returns a send-only or
+// receive-only channel.
+func directional(ft *ast.FuncType) bool {
+	for _, fl := range []*ast.FieldList{ft.Params, ft.Results} {
+		if fl == nil {
+			continue
+		}
+		for _, f := range fl.List {
+			if ch, ok := f.Type.(*ast.ChanType); ok && ch.Dir != ast.SEND|ast.RECV {
+				return true
+			}
+		}
+	}
+	return false
 }
