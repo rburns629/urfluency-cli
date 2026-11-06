@@ -9,6 +9,14 @@ sums up the release in one line. Each change is a bullet that starts with
 `New:`, `Improved:`, `Fixed:`, or `Security:`, written for people who use the
 CLI rather than for people who work on it.
 
+## v1.6.0 (2026-11-06)
+
+Old code is judged by the standards of its time.
+
+- Improved: Findings on lines written before a practice was established count for less in your score, and not at all before the practice existed. Python from 2016 is not marked down in full for missing type annotations, and Go from 2019 is not expected to use generics. Each weakness says how many of its findings are legacy; they are still listed, since old code is still worth updating. Problems that were never good practice, such as a bare except, count in full whenever they were written.
+- Improved: Idioms newer than most of your code, such as typing.Protocol in Python written before 3.8, weigh less in your idiom range.
+- Improved: Ratings name the new model, local-0.4-uncalibrated. Scores can differ from earlier versions, so compare scores from the same model.
+
 ## v1.5.2 (2026-11-05)
 
 - Improved: `urfluency check` reads source files up to 32 MB, such as a vendored, generated parser, instead of skipping everything over 2 MB. A large code file is checked like any other, so it no longer leaves the result at Review recommended just for being large.

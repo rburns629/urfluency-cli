@@ -95,9 +95,10 @@ func TestApplies(t *testing.T) {
 }
 
 func TestFindingsCarryNoValue(t *testing.T) {
-	// analysis.Finding has only Rule, Path, Line, and Positive; this guards
-	// against adding a field that could carry a matched secret.
-	want := map[string]reflect.Kind{"Rule": reflect.String, "Path": reflect.String, "Line": reflect.Int, "Positive": reflect.Bool}
+	// analysis.Finding has only Rule, Path, Line, Year (from blame, never from
+	// the file), and Positive; this guards against adding a field that could
+	// carry a matched secret.
+	want := map[string]reflect.Kind{"Rule": reflect.String, "Path": reflect.String, "Line": reflect.Int, "Year": reflect.Int, "Positive": reflect.Bool}
 	typ := reflect.TypeOf(analysis.Finding{})
 	if typ.NumField() != len(want) {
 		t.Fatalf("analysis.Finding has %d fields; secrets must never be stored on findings", typ.NumField())

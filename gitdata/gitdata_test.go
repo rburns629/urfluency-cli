@@ -33,6 +33,12 @@ func TestOwnedLines(t *testing.T) {
 		t.Errorf("owned lines = %v, want lines 2 and 4 from %s", got, head)
 	}
 
+	// The dated form also gives each owning commit's author time.
+	if _, dates, err := repo.OwnedLinesDated(ctx, head, "a.go", []string{"me@example.com"}, time.Time{}); err != nil ||
+		len(dates) != 1 || !dates[head].Equal(time.Date(2026, 6, 1, 0, 0, 0, 0, time.UTC)) {
+		t.Errorf("dates = %v, %v; want %s at 2026-06-01", dates, err, head)
+	}
+
 	since := time.Date(2026, 7, 1, 0, 0, 0, 0, time.UTC)
 	got, err = repo.OwnedLines(ctx, head, "a.go", []string{"me@example.com"}, since)
 	if err != nil {

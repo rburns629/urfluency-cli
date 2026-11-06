@@ -15,6 +15,7 @@ import (
 	"time"
 
 	"github.com/rburns629/urfluency-cli/gitdata"
+	"github.com/rburns629/urfluency-cli/rules"
 )
 
 // dependencyDirs hold installed packages, environments, and package caches, not
@@ -114,6 +115,9 @@ type LanguageResult struct {
 	AssistedFindings int
 	AssistedByRule   map[string]int // findings on AI-assisted lines, per rule
 	TestLines        int            // owned lines in test files, included in OwnedLines
+	// LinesByYear counts owned lines by Finding.Year; lines without a year
+	// are left out, so they number OwnedLines minus the sum.
+	LinesByYear map[int]int
 	// Idioms counts positive findings on owned lines, per rule.
 	Idioms map[string]IdiomUse
 	// Evidence counts owned functions and their complexity; nil when the
@@ -179,9 +183,10 @@ type ownedFile struct {
 	analyzer Analyzer // nil when no analyzer applies or it skips the file
 	text     bool     // eligible for scanners
 	file     File
-	owned    map[int]string // line → commit
-	ai       map[int]bool   // lines matching agent-written session lines
-	assisted map[int]bool   // ai lines plus lines from AI-marked commits
+	owned    map[int]string       // line → commit
+	dates    map[string]time.Time // commit → author time, when blamed
+	ai       map[int]bool         // lines matching agent-written session lines
+	assisted map[int]bool         // ai lines plus lines from AI-marked commits
 }
 
 // Scan analyzes the files at HEAD and keeps findings on lines owned by the user.
@@ -470,7 +475,7 @@ func (r *Result) addDismissed(c runCounts) {
 // copy.
 func run(ctx context.Context, name string, group []ownedFile,
 	analyze func(context.Context, []File) ([]Finding, error), opts Options) (LanguageResult, runCounts, error) {
-	lr := LanguageResult{Language: name, Files: len(group), AssistedByRule: map[string]int{}, Idioms: map[string]IdiomUse{}}
+	lr := LanguageResult{Language: name, Files: len(group), AssistedByRule: map[string]int{}, Idioms: map[string]IdiomUse{}, LinesByYear: map[int]int{}}
 	owned := map[string]map[int]string{}
 	assisted := map[string]map[int]bool{}
 	inputs := make([]File, 0, len(group))
@@ -499,12 +504,21 @@ func run(ctx context.Context, name string, group []ownedFile,
 		}
 		return lines[n-1]
 	}
+	yearOf := lineYears(group, findings, time.Now())
+	for _, f := range group {
+		for line := range f.owned {
+			if y := yearOf(f.file.Path, line); y > 0 {
+				lr.LinesByYear[y]++
+			}
+		}
+	}
 	skipped, skippedByRule := 0, map[string]int{}
 	idiomFiles := map[string]map[string]bool{}
 	for _, fd := range findings {
 		if owned[fd.Path][fd.Line] == "" {
 			continue
 		}
+		fd.Year = yearOf(fd.Path, fd.Line)
 		if !fd.Positive && len(opts.Dismissed) > 0 && opts.Dismissed[DismissalKey(fd.Rule, lineOf(fd.Path, fd.Line))] {
 			skipped++
 			skippedByRule[fd.Rule]++
@@ -550,6 +564,53 @@ func run(ctx context.Context, name string, group []ownedFile,
 		return lr.Findings[i].Line < lr.Findings[j].Line
 	})
 	return lr, runCounts{dismissed: skipped, dismissedByRule: skippedByRule, unanalyzed: unanalyzed}, nil
+}
+
+// earliestYear is when Git was first released: an owned line dated before it
+// was not committed then.
+const earliestYear = 2005
+
+// lineYears returns the year of each owned line of group, from its commit's
+// author time, for weighting findings by rule eras. Author time is set by
+// whoever commits, so a commit's lines get no year (0, which era weighting
+// counts in full) when its time is before Git existed, in the future, or
+// before an idiom one of its own lines uses: a commit dated 2015 that holds
+// an f-string was not written in 2015.
+func lineYears(group []ownedFile, findings []Finding, now time.Time) func(path string, line int) int {
+	owned, dates := map[string]map[int]string{}, map[string]time.Time{}
+	for _, f := range group {
+		owned[f.file.Path] = f.owned
+		for c, t := range f.dates {
+			dates[c] = t
+		}
+	}
+	untrusted := map[string]bool{}
+	for c, t := range dates {
+		if t.Year() < earliestYear || t.After(now) {
+			untrusted[c] = true
+		}
+	}
+	for _, fd := range findings {
+		if !fd.Positive {
+			continue
+		}
+		c := owned[fd.Path][fd.Line]
+		t, ok := dates[c]
+		if !ok {
+			continue
+		}
+		if r, known := rules.Lookup(fd.Rule); known && r.Era.Introduced > t.Year() {
+			untrusted[c] = true
+		}
+	}
+	return func(path string, line int) int {
+		c := owned[path][line]
+		t, ok := dates[c]
+		if !ok || untrusted[c] {
+			return 0
+		}
+		return t.Year()
+	}
 }
 
 // analyzeEach analyzes one file at a time, each bounded by AnalysisBudget, and
@@ -696,10 +757,11 @@ func loadOwned(ctx context.Context, repo gitdata.Repo, head string, paths []stri
 				return
 			}
 			var owned map[int]string
+			var dates map[string]time.Time
 			if blame == nil || blame(p) {
 				fileCtx, cancel := context.WithTimeout(ctx, BlameTimeout)
 				var err error
-				owned, err = repo.OwnedLines(fileCtx, head, p, opts.Emails, opts.Since)
+				owned, dates, err = repo.OwnedLinesDated(fileCtx, head, p, opts.Emails, opts.Since)
 				timedOut := errors.Is(fileCtx.Err(), context.DeadlineExceeded) // checked before cancel
 				cancel()
 				if err != nil {
@@ -729,7 +791,7 @@ func loadOwned(ctx context.Context, repo gitdata.Repo, head string, paths []stri
 			if bytes.IndexByte(content, 0) >= 0 {
 				return // binary
 			}
-			of := ownedFile{file: f, owned: owned, text: len(content) <= maxScanBytes,
+			of := ownedFile{file: f, owned: owned, dates: dates, text: len(content) <= maxScanBytes,
 				ai: agentWritten(content, owned, opts.AgentLines[p])}
 			if a := ForPath(p); a != nil && !a.Skip(f) {
 				of.analyzer = a

@@ -12,6 +12,7 @@ package facts
 import (
 	"fmt"
 	"sort"
+	"strconv"
 	"strings"
 	"time"
 
@@ -64,17 +65,23 @@ type Scan struct {
 
 // Language is one analysis.LanguageResult, with findings counted per rule.
 type Language struct {
-	Name             string           `json:"name"`
-	Frameworks       []string         `json:"frameworks,omitempty"`
-	FrameworkUse     map[string]Usage `json:"framework_use,omitempty"`
-	Files            int              `json:"files"`
-	OwnedLines       int              `json:"owned_lines"`
-	FindingsByRule   map[string]int   `json:"findings_by_rule,omitempty"`
-	AssistedLines    int              `json:"assisted_lines"`
-	AssistedFindings int              `json:"assisted_findings"`
-	AssistedByRule   map[string]int   `json:"assisted_by_rule,omitempty"`
-	TestLines        int              `json:"test_lines"`
-	Idioms           map[string]Idiom `json:"idioms,omitempty"`
+	Name           string           `json:"name"`
+	Frameworks     []string         `json:"frameworks,omitempty"`
+	FrameworkUse   map[string]Usage `json:"framework_use,omitempty"`
+	Files          int              `json:"files"`
+	OwnedLines     int              `json:"owned_lines"`
+	FindingsByRule map[string]int   `json:"findings_by_rule,omitempty"`
+	// FindingsByRuleYear splits FindingsByRule by the year of each finding's
+	// line, and LinesByYear the owned lines, for weighting by rule eras.
+	// Findings and lines without a year are left out: they are the totals
+	// minus the sums. Absent from CLIs before 1.6.0, which get no era relief.
+	FindingsByRuleYear map[string]map[string]int `json:"findings_by_rule_year,omitempty"`
+	LinesByYear        map[string]int            `json:"owned_lines_by_year,omitempty"`
+	AssistedLines      int                       `json:"assisted_lines"`
+	AssistedFindings   int                       `json:"assisted_findings"`
+	AssistedByRule     map[string]int            `json:"assisted_by_rule,omitempty"`
+	TestLines          int                       `json:"test_lines"`
+	Idioms             map[string]Idiom          `json:"idioms,omitempty"`
 	// Evidence is the logic the owned code holds; absent from CLIs before
 	// 1.1.0 and for code with no function the analyzer measured.
 	Evidence *Evidence `json:"evidence,omitempty"`
@@ -246,7 +253,22 @@ func FromResult(r analysis.Result) Scan {
 			l.FindingsByRule = map[string]int{}
 			for _, f := range lr.Findings {
 				l.FindingsByRule[f.Rule]++
+				if f.Year > 0 {
+					if l.FindingsByRuleYear == nil {
+						l.FindingsByRuleYear = map[string]map[string]int{}
+					}
+					if l.FindingsByRuleYear[f.Rule] == nil {
+						l.FindingsByRuleYear[f.Rule] = map[string]int{}
+					}
+					l.FindingsByRuleYear[f.Rule][strconv.Itoa(f.Year)]++
+				}
 			}
+		}
+		for y, n := range lr.LinesByYear {
+			if l.LinesByYear == nil {
+				l.LinesByYear = map[string]int{}
+			}
+			l.LinesByYear[strconv.Itoa(y)] = n
 		}
 		if len(lr.Idioms) > 0 {
 			l.Idioms = map[string]Idiom{}
@@ -322,9 +344,24 @@ func (s Scan) Result() analysis.Result {
 		}
 		sort.Strings(rules)
 		for _, rule := range rules {
-			for range l.FindingsByRule[rule] {
+			// Dated findings first, oldest first, then the rest without a year.
+			left := l.FindingsByRule[rule]
+			years := l.FindingsByRuleYear[rule]
+			for _, y := range sortedYears(years) {
+				for range min(years[strconv.Itoa(y)], left) {
+					lr.Findings = append(lr.Findings, analysis.Finding{Rule: rule, Year: y})
+					left--
+				}
+			}
+			for range left {
 				lr.Findings = append(lr.Findings, analysis.Finding{Rule: rule})
 			}
+		}
+		for _, y := range sortedYears(l.LinesByYear) {
+			if lr.LinesByYear == nil {
+				lr.LinesByYear = map[int]int{}
+			}
+			lr.LinesByYear[y] = l.LinesByYear[strconv.Itoa(y)]
 		}
 		if l.Idioms != nil {
 			lr.Idioms = map[string]analysis.IdiomUse{}
@@ -385,6 +422,19 @@ func FromGrades(g sessions.Grades) Sessions {
 
 // projectKey orders projects by their languages, size, findings, and gates;
 // numbers are zero-padded so string order is numeric order.
+// sortedYears returns the years among m's keys in order, skipping keys that
+// are not plausible years, which an upload could carry.
+func sortedYears(m map[string]int) []int {
+	var out []int
+	for k := range m {
+		if y, err := strconv.Atoi(k); err == nil && y >= 1970 && y <= 9999 {
+			out = append(out, y)
+		}
+	}
+	sort.Ints(out)
+	return out
+}
+
 func projectKey(p Project) string {
 	return fmt.Sprintf("%s|%012d|%012d|%s", strings.Join(p.Languages, ","), p.AssistedLines+p.OtherLines,
 		p.AssistedFindings+p.OtherFindings, strings.Join(p.CIGates, ","))

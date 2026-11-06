@@ -19,6 +19,9 @@ type Finding struct {
 	Rule string
 	Path string
 	Line int
+	// Year is when the line was last changed, from its commit's author time;
+	// 0 when unknown or not believable (see lineYears).
+	Year int
 	// Positive marks an idiom the code uses well, such as error wrapping, rather
 	// than a problem. Idioms count toward proficiency and never toward findings.
 	Positive bool
