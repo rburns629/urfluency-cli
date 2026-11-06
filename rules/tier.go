@@ -33,11 +33,11 @@ func (r Rule) Level() Tier {
 // tiers are the tiers of this catalog's rules. Rules registered elsewhere,
 // such as the engine's, set Tier themselves.
 var tiers = map[string]Tier{
-	// Python mistakes that show a misunderstanding of the language.
-	"py.bare-except":              Fundamental,
-	"py.swallowed-exception":      Fundamental,
-	"py.mutable-default-argument": Fundamental,
-	"py.is-literal-comparison":    Fundamental,
+	// Python mistakes that show a misunderstanding of the language. A bare
+	// except, a swallowed exception, and a mutable default are practice:
+	// Flask and SQLAlchemy catch everything to clean up and re-raise, and
+	// accelerate passes [] defaults it never changes, on purpose.
+	"py.is-literal-comparison": Fundamental,
 
 	// Python idioms.
 	"py.idiom.f-string":         Basic,
@@ -81,6 +81,29 @@ var tiers = map[string]Tier{
 	"go.construct.sync":       Advanced,
 	"go.construct.iterators":  Advanced,
 	"go.construct.reflection": Advanced,
+
+	// JavaScript's loose equality and empty catch are practice: socket.io
+	// writes typeof x == "string" and zod catches feature checks on
+	// purpose.
+
+	// JavaScript and TypeScript idioms.
+	"js.idiom.optional-chaining":   Basic,
+	"js.idiom.nullish-coalescing":  Basic,
+	"js.idiom.destructuring":       Basic,
+	"js.idiom.async-await":         Intermediate,
+	"js.idiom.concurrent-promises": Advanced,
+	"ts.idiom.declared-types":      Basic,
+	"ts.idiom.union-types":         Intermediate,
+	"ts.idiom.unknown":             Intermediate,
+	"ts.idiom.utility-types":       Intermediate,
+	"ts.idiom.generics":            Advanced,
+	"ts.idiom.type-guard":          Advanced,
+
+	// JavaScript and TypeScript constructs.
+	"js.construct.generators":      Advanced,
+	"js.construct.metaprogramming": Advanced,
+	"js.construct.object-model":    Advanced,
+	"ts.construct.type-level":      Advanced,
 
 	// Python constructs.
 	"py.construct.protocol-methods":     Advanced,

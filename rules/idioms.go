@@ -56,6 +56,10 @@ func init() {
 		idiom("ts.idiom.type-guard", "Type guards (x is T)", "Narrows types safely with checks the compiler trusts.", "typescript"),
 		idiom("ts.idiom.declared-types", "Interfaces and type aliases", "Names the shapes of data instead of leaving them implicit.", "typescript"),
 		idiom("ts.idiom.unknown", "unknown instead of any", "Forces values from outside to be checked before use.", "typescript"),
+		construct("js.construct.generators", "Generators and iterators", "Writes generator functions and objects that for...of can iterate, with Symbol.iterator.", js...),
+		construct("js.construct.metaprogramming", "Proxy and Reflect", "Intercepts and forwards operations on objects with Proxy and Reflect.", js...),
+		construct("js.construct.object-model", "The object model", "Shapes objects with prototypes, property descriptors, and getters and setters.", js...),
+		construct("ts.construct.type-level", "Type-level programming", "Computes types with conditional, mapped, infer, and template literal types.", "typescript"),
 		idiom("ts.idiom.utility-types", "Utility types", "Derives types with Partial, Pick, Omit, and Record instead of repeating them.", "typescript"),
 	)
 }

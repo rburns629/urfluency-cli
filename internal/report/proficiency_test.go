@@ -81,12 +81,11 @@ func TestLevels(t *testing.T) {
 		level    string
 	}{
 		{"competent code with no evidence of more", 2000, nil, nil, "Intermediate"},
-		{"basic mistakes at a high rate", 1000, nil, pyFindings("py.bare-except", 10, 0), "Beginner"},
-		{"one basic slip in a short file", 100, nil, pyFindings("py.bare-except", 1, 0), "Beginner"},
-		{"three kinds of basic mistake", 800, nil, append(append(pyFindings("py.bare-except", 1, 0), pyFindings("py.mutable-default-argument", 1, 0)...), pyFindings("py.is-literal-comparison", 1, 0)...), "Beginner"},
-		// Three kinds once each in a large codebase is not a beginner's work.
-		{"three kinds of slip in a large codebase", 500000, nil, append(append(pyFindings("py.bare-except", 1, 0), pyFindings("py.mutable-default-argument", 1, 0)...), pyFindings("py.is-literal-comparison", 1, 0)...), "Intermediate"},
-		{"basic slips in plenty of code", 5000, nil, pyFindings("py.bare-except", 5, 0), "Intermediate"},
+		{"basic mistakes at a high rate", 1000, nil, pyFindings("py.is-literal-comparison", 10, 0), "Beginner"},
+		{"one basic slip in a short file", 100, nil, pyFindings("py.is-literal-comparison", 1, 0), "Beginner"},
+		{"basic slips in plenty of code", 5000, nil, pyFindings("py.is-literal-comparison", 5, 0), "Intermediate"},
+		// Several kinds of fundamental mistake are tested in urfluency-app,
+		// where the engine's fundamental rules are in the catalog.
 		// Practice findings lower the score but never make a beginner.
 		{"many practice findings", 250, nil, pyFindings("py.open-without-with", 20, 0), "Intermediate"},
 		{"advanced constructs used correctly", 300, advanced, nil, "Advanced"},
@@ -94,8 +93,10 @@ func TestLevels(t *testing.T) {
 		// Expert also needs a score of 85: three advanced constructs with a
 		// narrow idiom range read Advanced.
 		{"advanced parts, narrow range", 2000, pyShown("py.construct.protocol-methods", "py.construct.decorator-definition", "py.construct.generic-typing", "py.idiom.type-hints"), nil, "Advanced"},
-		// A bare except was never good practice, so it counts whenever written.
-		{"basic mistakes count whenever written", 1000, nil, pyFindings("py.bare-except", 10, 2001), "Beginner"},
+		// A literal compared with is was never right, so it counts whenever written.
+		{"basic mistakes count whenever written", 1000, nil, pyFindings("py.is-literal-comparison", 10, 2001), "Beginner"},
+		// A bare except is practice: it lowers the score, never the level.
+		{"many bare excepts", 1000, nil, pyFindings("py.bare-except", 20, 0), "Intermediate"},
 	} {
 		lr := analysis.LanguageResult{Language: "python", OwnedLines: tc.lines, Idioms: tc.idioms, Findings: tc.findings}
 		lang := buildLanguage(lr, false)

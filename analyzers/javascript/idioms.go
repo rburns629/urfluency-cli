@@ -1,6 +1,8 @@
 package javascript
 
 import (
+	"strings"
+
 	ts "github.com/tree-sitter/go-tree-sitter"
 
 	"github.com/rburns629/urfluency-cli/analysis"
@@ -33,9 +35,33 @@ func (c *checker) visitIdioms(n *ts.Node) bool {
 		c.idiom("js.idiom.destructuring", n)
 	case "call_expression":
 		if fn := n.ChildByFieldName("function"); fn != nil && fn.Kind() == "member_expression" {
-			switch c.tree.Text(fn) {
-			case "Promise.all", "Promise.allSettled", "Promise.race", "Promise.any":
+			switch text := c.tree.Text(fn); {
+			case text == "Promise.all", text == "Promise.allSettled", text == "Promise.race", text == "Promise.any":
 				c.idiom("js.idiom.concurrent-promises", n)
+			case strings.HasPrefix(text, "Reflect."):
+				c.idiom("js.construct.metaprogramming", n)
+			case objectModel[text]:
+				c.idiom("js.construct.object-model", n)
+			}
+		}
+	case "new_expression":
+		if ctor := n.ChildByFieldName("constructor"); ctor != nil && c.tree.Text(ctor) == "Proxy" {
+			c.idiom("js.construct.metaprogramming", n)
+		}
+	case "generator_function_declaration", "generator_function":
+		c.idiom("js.construct.generators", n)
+	case "method_definition":
+		if parsing.HasToken(n, "*") {
+			c.idiom("js.construct.generators", n) // *[Symbol.iterator]() and other generator methods
+		}
+		if parsing.HasToken(n, "get", "set") {
+			c.idiom("js.construct.object-model", n) // get size() and set size(v)
+		}
+	case "assignment_expression":
+		// Foo.prototype.bar = ..., the pre-class way to give objects methods.
+		if l := n.ChildByFieldName("left"); l != nil && l.Kind() == "member_expression" {
+			if obj := l.ChildByFieldName("object"); obj != nil && strings.HasSuffix(c.tree.Text(obj), ".prototype") {
+				c.idiom("js.construct.object-model", n)
 			}
 		}
 	}
@@ -61,6 +87,14 @@ func (c *checker) visitIdioms(n *ts.Node) bool {
 		if name := n.ChildByFieldName("name"); name != nil && utilityTypes[c.tree.Text(name)] {
 			c.idiom("ts.idiom.utility-types", n)
 		}
+	case "conditional_type", "mapped_type_clause", "template_literal_type":
+		c.idiom("ts.construct.type-level", n)
 	}
 	return true
+}
+
+// objectModel are the Object functions that shape objects themselves.
+var objectModel = map[string]bool{
+	"Object.defineProperty": true, "Object.defineProperties": true, "Object.create": true,
+	"Object.setPrototypeOf": true, "Object.getPrototypeOf": true, "Object.getOwnPropertyDescriptor": true,
 }

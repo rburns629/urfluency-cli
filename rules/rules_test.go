@@ -33,8 +33,8 @@ func TestCatalogIsComplete(t *testing.T) {
 			t.Errorf("tier for unknown rule %s", id)
 		}
 	}
-	if r, _ := Lookup("py.bare-except"); r.Level() != Fundamental {
-		t.Errorf("bare except is %q, want fundamental", r.Level())
+	if r, _ := Lookup("py.is-literal-comparison"); r.Level() != Fundamental {
+		t.Errorf("is with a literal is %q, want fundamental", r.Level())
 	}
 	if r, _ := Lookup("py.open-without-with"); r.Level() != Practice {
 		t.Errorf("open without with is %q, want practice", r.Level())
