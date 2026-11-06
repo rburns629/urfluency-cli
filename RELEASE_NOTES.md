@@ -9,6 +9,15 @@ sums up the release in one line. Each change is a bullet that starts with
 `New:`, `Improved:`, `Fixed:`, or `Security:`, written for people who use the
 CLI rather than for people who work on it.
 
+## v1.7.0 (2026-11-06)
+
+A level now states what your code proves you know, apart from its score.
+
+- Improved: A language's level comes from evidence rather than its score. Beginner means basic mistakes at a meaningful rate, such as == None or code after return; Intermediate is competent, conventional code; Advanced and Expert mean the language's advanced parts used correctly, such as protocol methods and decorators in Python, generics and channels in Go, or the object model in JavaScript. A project with many findings can still show advanced command, and its score still shows what to fix.
+- Improved: Any amount of code is rated. The 300-line minimum and the cap at Beginner below 2,000 lines are gone: more code makes a rating more certain, never higher, and confidence says how much evidence there is.
+- Improved: An idiom counts once used 3 times across 2 files or 2 functions, so a single, well-written module can show it.
+- Improved: Advanced constructs of 13 languages count toward the level, and every rule has a tier: fundamental, practice, or advanced. Practice findings, such as a bare except or a complex function, lower the score, never the level.
+
 ## v1.6.1 (2026-11-06)
 
 - Security: A crafted Dart file with a long run of invalid UTF-8 could keep the analyzer busy far past its time limit; a few kilobytes took seconds, and the time grew with the square of the file. Invalid bytes are now read as spaces before parsing, so such a file parses at once. Found by the nightly fuzzing; no real Dart file is affected, since Dart source is UTF-8.
