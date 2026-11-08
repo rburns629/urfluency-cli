@@ -37,13 +37,13 @@ would be sent. `urfluency version` names the engine a build runs. Hosted scans b
 ## Install
 
 ```sh
-brew install rotburn/tap/urfluency    # macOS and Linux; installs Git if missing
+brew install roburns/tap/urfluency    # macOS and Linux; installs Git if missing
 urfluency doctor                        # checks dependencies; installs nothing
 ```
 
 Release archives for macOS (Apple Silicon and Intel, macOS 13+) and Linux (x86-64
 and ARM, static binaries) are also attached to each
-[GitHub Release](https://github.com/rotburn/urfluency-cli/releases) with a
+[GitHub Release](https://github.com/roburns/urfluency-cli/releases) with a
 `checksums.txt`. To build from source you need Go 1.27.3 or later, a C compiler
 (for tree-sitter), and Git: `go build -o urfluency ./cmd/urfluency`.
 

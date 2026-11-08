@@ -73,7 +73,7 @@ func Register(rs ...Rule) {
 func Duplicates() []string { return append([]string(nil), duplicates...) }
 
 // standardsBase is where clean-agent-code's standards are published.
-const standardsBase = "https://github.com/rotburn/clean-agent-code/blob/main/"
+const standardsBase = "https://github.com/roburns/clean-agent-code/blob/main/"
 
 // ruleStandards link rules to the clean-agent-code section that covers them,
 // where a category default would be too broad.

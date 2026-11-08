@@ -17,7 +17,7 @@ import (
 // out. It asks GitHub for the latest release at most once a day, sends nothing
 // about the user, and never runs offline, in CI, or for development builds.
 var (
-	latestReleaseURL = "https://api.github.com/repos/rotburn/urfluency-cli/releases/latest"
+	latestReleaseURL = "https://api.github.com/repos/roburns/urfluency-cli/releases/latest"
 	updateEvery      = 24 * time.Hour
 	updateTimeout    = 2 * time.Second
 )
@@ -122,7 +122,7 @@ func updateNotice(ctx context.Context, current string) string {
 	if !newer(c.Latest, current) {
 		return ""
 	}
-	return fmt.Sprintf("urfluency %s is available (you have %s): brew upgrade urfluency, or see https://github.com/rotburn/urfluency-cli/releases",
+	return fmt.Sprintf("urfluency %s is available (you have %s): brew upgrade urfluency, or see https://github.com/roburns/urfluency-cli/releases",
 		strings.TrimPrefix(c.Latest, "v"), strings.TrimPrefix(current, "v"))
 }
 
