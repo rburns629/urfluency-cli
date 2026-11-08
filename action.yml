@@ -12,7 +12,7 @@
 #     - uses: actions/checkout@<sha>  # with fetch-depth: 0, for practice ratings
 #       with:
 #         fetch-depth: 0
-#     - uses: rotburn/urfluency-cli@<tag>
+#     - uses: roburns/urfluency-cli@<tag>
 #       with:
 #         link-code: ${{ secrets.URFLUENCY_LINK_CODE }}  # without the GitHub App
 name: urFluency repository ratings
@@ -58,7 +58,7 @@ runs:
         esac
         archive="urfluency_${version}_${platform}.tar.gz"
         work="$(mktemp -d)"
-        base="https://github.com/rotburn/urfluency-cli/releases/download/v${version}"
+        base="https://github.com/roburns/urfluency-cli/releases/download/v${version}"
         curl -fsSL --proto '=https' -o "${work}/${archive}" "${base}/${archive}"
         curl -fsSL --proto '=https' -o "${work}/checksums.txt" "${base}/checksums.txt"
         (cd "$work" && grep -E "  ${archive}\$" checksums.txt | shasum -a 256 -c -)
