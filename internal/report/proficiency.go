@@ -12,7 +12,8 @@ import (
 
 // ProficiencyModel versions the scoring below. Its constants are reasoned
 // starting points, not yet calibrated against outcomes (see DESIGN.md).
-const ProficiencyModel = "local-0.5-uncalibrated"
+// local-0.6 weighs a language's score by its owned lines (byVolume).
+const ProficiencyModel = "local-0.6-uncalibrated"
 
 // Proficiency rates one language from the user's own code: how much of the
 // language's idiom range they use, and how cleanly they write it.
@@ -65,10 +66,17 @@ const (
 	// least this many files or functions (demonstrated).
 	minIdiomUses  = 3
 	minIdiomFiles = 2
+	// byVolume moves a score from little code toward neutralScore: at
+	// halfLines owned lines it counts half. Sustained use adds up to useBonus,
+	// in full at useFullLines.
+	neutralScore = 50
+	halfLines    = 1000
+	useBonus     = 4
+	useFullLines = 100_000
 )
 
 // proficiency scores a language with owned code; it returns nil otherwise.
-// Any amount of code is rated: volume sets its confidence, never its score.
+// Any amount of code is rated, and its volume weighs the score (byVolume).
 // counts are findings per category weighted by their rules' eras. It also
 // returns each idiom's weight in the idiom range: 1 when demonstrated, and
 // otherwise its era share of the owned lines, so code from before an idiom
@@ -115,7 +123,7 @@ func proficiency(lr analysis.LanguageResult, counts map[rules.Category]float64) 
 		scores = append(scores, score)
 	}
 	rng := min(100, 100*float64(shown)/catalog)
-	p.Score, p.Range = int(math.Round(blend(rng, scores))), int(math.Round(rng))
+	p.Score, p.Range = int(math.Round(byVolume(blend(rng, scores), lr.OwnedLines))), int(math.Round(rng))
 	p.Confidence = languageConfidence(lr)
 	p.Evidence = languageEvidence(lr)
 	p.Level = languageLevel(p.Evidence, p.Score)
@@ -153,6 +161,18 @@ func blend(rng float64, categories []float64) float64 {
 	}
 	score := rangeWeight*rng + (1-rangeWeight)*sum/float64(len(categories))
 	return min(score, weakest+weakestLead)
+}
+
+// byVolume weighs a language's score by the code behind it: little code is
+// little evidence, so its score moves toward neutral, either way, in
+// proportion; and sustained use adds a little, growing with the logarithm
+// of the lines. 1,700 lines scoring 64 rate 60; 66,000 lines scoring 64
+// rate 67 (DESIGN.md, "Volume").
+func byVolume(score float64, lines int) float64 {
+	l := float64(lines)
+	weighted := neutralScore + (score-neutralScore)*l/(l+halfLines)
+	use := useBonus * math.Min(1, math.Log2(1+l/1000)/math.Log2(1+useFullLines/1000))
+	return math.Min(100, weighted+use)
 }
 
 func band(score float64) string {

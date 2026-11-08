@@ -110,7 +110,7 @@ func languageSteps(lang Language) []Step {
 		for c := range p.Categories {
 			scores = append(scores, categoryScore(rules.Category(c), counts[c]/kLines))
 		}
-		s := blend(min(100, 100*float64(idioms)/catalog), scores)
+		s := byVolume(blend(min(100, 100*float64(idioms)/catalog), scores), lang.OwnedLines)
 		return int(math.Round(s))
 	}
 	// Gains are measured from the formula's own baseline and applied to the

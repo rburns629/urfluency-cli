@@ -28,15 +28,16 @@ func TestProficiency(t *testing.T) {
 		score      int
 		confidence string
 	}{
-		{"clean code, no idioms", 10000, nil, nil, 65, "high"},
-		{"clean code, every idiom", 10000, goIdioms(), nil, 100, "high"},
+		{"clean code, no idioms", 10000, nil, nil, 66, "high"},
+		{"clean code, every idiom", 10000, goIdioms(), nil, 98, "high"},
 		// Type safety at 70 per 1,000 lines scores 12.5, which caps the language
-		// at 42.5 however strong the rest is.
-		{"one weak category", 10000, goIdioms(), map[rules.Category]float64{rules.TypeSafety: 700}, 43, "high"},
-		{"one-off idioms do not count", 3000, map[string]analysis.IdiomUse{"go.idiom.generics": {Uses: 2, Files: 1}}, nil, 65, "medium"},
-		// Volume sets confidence, never the score.
-		{"a small, clean, idiomatic file", 300, goIdioms(), nil, 100, "low"},
-		{"a few lines", 12, nil, nil, 65, "low"},
+		// at 42.5 however strong the rest is; the volume weighting then moves it
+		// toward 50.
+		{"one weak category", 10000, goIdioms(), map[rules.Category]float64{rules.TypeSafety: 700}, 45, "high"},
+		{"one-off idioms do not count", 3000, map[string]analysis.IdiomUse{"go.idiom.generics": {Uses: 2, Files: 1}}, nil, 62, "medium"},
+		// Volume weighs the score: a small file is little evidence.
+		{"a small, clean, idiomatic file", 300, goIdioms(), nil, 62, "low"},
+		{"a few lines", 12, nil, nil, 50, "low"},
 	}
 	for _, tc := range tests {
 		lr := analysis.LanguageResult{Language: "go", OwnedLines: tc.lines, Idioms: tc.idioms}
@@ -89,7 +90,10 @@ func TestLevels(t *testing.T) {
 		// Practice findings lower the score but never make a beginner.
 		{"many practice findings", 250, nil, pyFindings("py.open-without-with", 20, 0), "Intermediate"},
 		{"advanced constructs used correctly", 300, advanced, nil, "Advanced"},
-		{"command of the advanced parts", 2000, expert, nil, "Expert"},
+		{"command of the advanced parts", 20000, expert, nil, "Expert"},
+		// Expert's score of 85 needs enough code: the same evidence in 2,000
+		// lines reads Advanced.
+		{"command of the advanced parts, in a small sample", 2000, expert, nil, "Advanced"},
 		// Expert also needs a score of 85: three advanced constructs with a
 		// narrow idiom range read Advanced.
 		{"advanced parts, narrow range", 2000, pyShown("py.construct.protocol-methods", "py.construct.decorator-definition", "py.construct.generic-typing", "py.idiom.type-hints"), nil, "Advanced"},
@@ -117,7 +121,7 @@ func TestIdiomEras(t *testing.T) {
 	from2018 := analysis.LanguageResult{Language: "go", OwnedLines: 10000, Idioms: idioms, LinesByYear: map[int]int{2018: 10000}}
 	pu, _, _ := proficiency(undated, nil)
 	p18, _, w := proficiency(from2018, nil)
-	if pu.Range >= 100 || p18.Range != 100 || p18.Score != 100 {
+	if pu.Range >= 100 || p18.Range != 100 || p18.Score != 98 {
 		t.Errorf("range undated %d, from 2018 %d (score %d); want under 100, then 100", pu.Range, p18.Range, p18.Score)
 	}
 	if w["go.idiom.generics"] != 0 || w["go.idiom.defer-cleanup"] != 1 {
@@ -153,5 +157,23 @@ func TestLegacyFindings(t *testing.T) {
 	}
 	if lang.Categories["type-safety"] != 4 || lang.weighted["type-safety"] != 2.5 {
 		t.Errorf("type safety: %d shown, %v scored; want 4 and 2.5", lang.Categories["type-safety"], lang.weighted["type-safety"])
+	}
+}
+
+// TestByVolume: little code moves a score toward neutral, either way, and
+// sustained use adds a little.
+func TestByVolume(t *testing.T) {
+	for _, tc := range []struct {
+		score       float64
+		lines, want int
+	}{
+		{64, 1700, 60},  // a small PowerShell codebase
+		{64, 66000, 67}, // a large Python one, with the same quality
+		{30, 500, 44},   // a weak score from little code is weak evidence too
+		{100, 100_000, 100},
+	} {
+		if got := int(byVolume(tc.score, tc.lines) + 0.5); got != tc.want {
+			t.Errorf("byVolume(%v, %d) = %d, want %d", tc.score, tc.lines, got, tc.want)
+		}
 	}
 }

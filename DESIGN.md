@@ -350,12 +350,24 @@ mistakes. Each level is now defined by evidence the engine can see:
   do not either. Fundamental rules skip test files, where odd code is often
   deliberate, and each must find nothing on the corpus's `top` projects.
 
-**Volume sets confidence, never the score.** The ceiling of official-3,
-which held a score below what a project's amount of logic supported, is
-removed: more code makes a rating more certain, not higher, and a short,
-capable module rates what it is, with low confidence. Confidence keeps
-official-3's measure (low below 320 units of functions and branches, high
-from five times that, or 2,000 and 10,000 lines without them).
+**Volume weighs the score (2026-11-08, local-0.6 and official-7).** The
+ceiling of official-3, which held a score below what a project's amount of
+logic supported, stays removed. But treating 1,700 lines and 66,000 lines of
+the same quality as the same rating overstated small samples: one owner's
+PowerShell and Python both rated 64 on those amounts. A language's score is
+now weighed by its owned lines L:
+
+    score' = 50 + (score − 50) × L / (L + 1,000)
+           + 4 × min(1, log2(1 + L/1,000) / log2(101))
+
+Little code is little evidence, so its score moves toward a neutral 50, in
+either direction and in proportion: at 1,000 lines a score counts half. And
+sustained use adds up to 4 points, growing with the logarithm of the lines and
+full at 100,000. The example above rates 60 and 67. Expert's score of 85 now
+needs a few thousand lines of strong code. Confidence keeps official-3's
+measure (low below 320 units of functions and branches, high from five times
+that, or 2,000 and 10,000 lines without them). Before release, the level
+harness below is rerun.
 
 **Idioms by function, not only by file.** An idiom or construct counts with
 3 uses across 2 files, or across 2 functions. Analyzers already report each

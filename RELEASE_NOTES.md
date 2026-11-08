@@ -9,6 +9,13 @@ sums up the release in one line. Each change is a bullet that starts with
 `New:`, `Improved:`, `Fixed:`, or `Security:`, written for people who use the
 CLI rather than for people who work on it.
 
+## v1.8.0 (2026-11-08)
+
+How much code you have now counts toward a language's score.
+
+- Improved: A language's score now weighs how much of your code it rests on. A score from a little code moves toward 50, since a little code is little evidence, and sustained use adds up to 4 points. The same quality in 1,700 lines now rates 60, and in 66,000 lines 67. At 1,000 lines a score counts half, so how far a score moves depends on how much code it rests on and how far it is from 50: 80 on 5,000 lines becomes 76.
+- Improved: Expert needs a score of 85, so it now takes a few thousand lines of strong code rather than one small module.
+
 ## v1.7.0 (2026-11-06)
 
 A level now states what your code proves you know, apart from its score.
