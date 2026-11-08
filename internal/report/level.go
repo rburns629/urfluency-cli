@@ -1,8 +1,8 @@
 package report
 
 import (
-	"github.com/rburns629/urfluency-cli/analysis"
-	"github.com/rburns629/urfluency-cli/rules"
+	"github.com/roburns/urfluency-cli/analysis"
+	"github.com/roburns/urfluency-cli/rules"
 )
 
 // A language's level states what its code proves its author knows; its score

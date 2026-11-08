@@ -7,7 +7,7 @@ import (
 
 	ts "github.com/tree-sitter/go-tree-sitter"
 
-	"github.com/rburns629/urfluency-cli/parsing"
+	"github.com/roburns/urfluency-cli/parsing"
 )
 
 // lockMethods return a poisoned-lock Result whose unwrap is the accepted idiom.

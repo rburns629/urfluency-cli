@@ -8,7 +8,7 @@ import (
 	"strings"
 	"time"
 
-	"github.com/rburns629/urfluency-cli/analysis"
+	"github.com/roburns/urfluency-cli/analysis"
 )
 
 // Persona describes the work the ratings show: the strongest areas, the role

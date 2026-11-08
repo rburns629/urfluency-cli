@@ -8,7 +8,7 @@ import (
 	"strconv"
 	"strings"
 
-	"github.com/rburns629/urfluency-cli/analysis"
+	"github.com/roburns/urfluency-cli/analysis"
 )
 
 // webFrameworks maps module paths to the framework names reported for Go;

@@ -16,8 +16,8 @@ import (
 	"strings"
 	"time"
 
-	"github.com/rburns629/urfluency-cli/analysis"
-	"github.com/rburns629/urfluency-cli/internal/sessions"
+	"github.com/roburns/urfluency-cli/analysis"
+	"github.com/roburns/urfluency-cli/internal/sessions"
 )
 
 // Format versions the facts.

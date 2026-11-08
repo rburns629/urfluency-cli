@@ -3,7 +3,7 @@ package analysis
 import (
 	"time"
 
-	"github.com/rburns629/urfluency-cli/gitdata"
+	"github.com/roburns/urfluency-cli/gitdata"
 )
 
 // Written counts the code lines the user's commits added since the scan's

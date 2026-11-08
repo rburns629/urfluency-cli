@@ -17,8 +17,8 @@ import (
 	"strings"
 	"time"
 
-	"github.com/rburns629/urfluency-cli/internal/report"
-	"github.com/rburns629/urfluency-cli/upload"
+	"github.com/roburns/urfluency-cli/internal/report"
+	"github.com/roburns/urfluency-cli/upload"
 )
 
 // Uploading is optional and never part of a scan. `urfluency login` links the

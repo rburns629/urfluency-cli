@@ -5,9 +5,9 @@ import (
 	"strings"
 	"testing"
 
-	"github.com/rburns629/urfluency-cli/analysis"
+	"github.com/roburns/urfluency-cli/analysis"
 
-	_ "github.com/rburns629/urfluency-cli/analyzers/python"
+	_ "github.com/roburns/urfluency-cli/analyzers/python"
 )
 
 func TestSummarize(t *testing.T) {

@@ -7,7 +7,7 @@ import (
 	"sort"
 	"testing"
 
-	"github.com/rburns629/urfluency-cli/analysis"
+	"github.com/roburns/urfluency-cli/analysis"
 )
 
 func findings(t *testing.T, path, src string) []string {

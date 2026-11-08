@@ -10,10 +10,10 @@ import (
 	"testing"
 	"time"
 
-	"github.com/rburns629/urfluency-cli/analysis"
-	"github.com/rburns629/urfluency-cli/facts"
-	"github.com/rburns629/urfluency-cli/internal/report"
-	"github.com/rburns629/urfluency-cli/vulns"
+	"github.com/roburns/urfluency-cli/analysis"
+	"github.com/roburns/urfluency-cli/facts"
+	"github.com/roburns/urfluency-cli/internal/report"
+	"github.com/roburns/urfluency-cli/vulns"
 )
 
 // fakeChecker finds every package of one name vulnerable.

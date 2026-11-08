@@ -1,4 +1,4 @@
-module github.com/rburns629/urfluency-cli/tools
+module github.com/roburns/urfluency-cli/tools
 
 go 1.27.3
 

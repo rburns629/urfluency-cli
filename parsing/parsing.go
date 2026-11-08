@@ -24,7 +24,7 @@ import (
 	rust "github.com/tree-sitter/tree-sitter-rust/bindings/go"
 	typescript "github.com/tree-sitter/tree-sitter-typescript/bindings/go"
 
-	swift "github.com/rburns629/urfluency-cli/third_party/tree-sitter-swift"
+	swift "github.com/roburns/urfluency-cli/third_party/tree-sitter-swift"
 )
 
 // Grammar is a tree-sitter language.

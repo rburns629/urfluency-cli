@@ -12,8 +12,8 @@ import (
 	"strings"
 	"time"
 
-	"github.com/rburns629/urfluency-cli/analysis"
-	"github.com/rburns629/urfluency-cli/rules"
+	"github.com/roburns/urfluency-cli/analysis"
+	"github.com/roburns/urfluency-cli/rules"
 )
 
 // dismissal is a finding the user said is not a real problem, such as a

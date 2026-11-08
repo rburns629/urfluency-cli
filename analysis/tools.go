@@ -7,7 +7,7 @@ import (
 	"strings"
 	"time"
 
-	"github.com/rburns629/urfluency-cli/gitdata"
+	"github.com/roburns/urfluency-cli/gitdata"
 )
 
 // ToolUse is how much the user worked with one tool, judged from the paths of

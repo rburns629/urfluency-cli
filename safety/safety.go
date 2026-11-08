@@ -28,9 +28,9 @@ import (
 	"sync/atomic"
 	"unicode/utf16"
 
-	"github.com/rburns629/urfluency-cli/analysis"
-	"github.com/rburns629/urfluency-cli/analyzers/secrets"
-	"github.com/rburns629/urfluency-cli/rules"
+	"github.com/roburns/urfluency-cli/analysis"
+	"github.com/roburns/urfluency-cli/analyzers/secrets"
+	"github.com/roburns/urfluency-cli/rules"
 )
 
 // Version identifies the rule set; reports carry it so results can be compared.

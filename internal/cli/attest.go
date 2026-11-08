@@ -12,7 +12,7 @@ import (
 	"os"
 	"time"
 
-	"github.com/rburns629/urfluency-cli/score"
+	"github.com/roburns/urfluency-cli/score"
 )
 
 // attest scores the repository a GitHub Actions job checked out, every

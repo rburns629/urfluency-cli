@@ -11,7 +11,7 @@ import (
 	"slices"
 	"strings"
 
-	"github.com/rburns629/urfluency-cli/internal/identity"
+	"github.com/roburns/urfluency-cli/internal/identity"
 )
 
 // stdin and interactive are variables so tests can answer prompts.

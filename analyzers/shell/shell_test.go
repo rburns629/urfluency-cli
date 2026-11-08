@@ -9,8 +9,8 @@ import (
 	"strings"
 	"testing"
 
-	"github.com/rburns629/urfluency-cli/analysis"
-	"github.com/rburns629/urfluency-cli/rules"
+	"github.com/roburns/urfluency-cli/analysis"
+	"github.com/roburns/urfluency-cli/rules"
 )
 
 func findings(t *testing.T, path, src string, positive bool) []string {

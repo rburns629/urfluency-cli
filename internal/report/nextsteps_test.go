@@ -4,8 +4,8 @@ import (
 	"fmt"
 	"testing"
 
-	"github.com/rburns629/urfluency-cli/analysis"
-	"github.com/rburns629/urfluency-cli/gates"
+	"github.com/roburns/urfluency-cli/analysis"
+	"github.com/roburns/urfluency-cli/gates"
 )
 
 // findings returns n findings of rule in distinct files.

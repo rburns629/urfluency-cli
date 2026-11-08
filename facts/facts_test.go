@@ -11,14 +11,14 @@ import (
 	"testing"
 	"time"
 
-	"github.com/rburns629/urfluency-cli/analysis"
-	"github.com/rburns629/urfluency-cli/facts"
-	"github.com/rburns629/urfluency-cli/gitdata"
-	"github.com/rburns629/urfluency-cli/internal/report"
-	"github.com/rburns629/urfluency-cli/internal/sessions"
-	"github.com/rburns629/urfluency-cli/internal/testutil"
+	"github.com/roburns/urfluency-cli/analysis"
+	"github.com/roburns/urfluency-cli/facts"
+	"github.com/roburns/urfluency-cli/gitdata"
+	"github.com/roburns/urfluency-cli/internal/report"
+	"github.com/roburns/urfluency-cli/internal/sessions"
+	"github.com/roburns/urfluency-cli/internal/testutil"
 
-	_ "github.com/rburns629/urfluency-cli/analyzers/all" // every analyzer
+	_ "github.com/roburns/urfluency-cli/analyzers/all" // every analyzer
 )
 
 var since = time.Date(2025, 1, 1, 0, 0, 0, 0, time.UTC)

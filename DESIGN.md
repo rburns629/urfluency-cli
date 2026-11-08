@@ -2,7 +2,7 @@
 
 Status: living design record, started 2026-10-26 and kept current (last updated
 2026-10-30). Sections marked decided or built carry their dates. Product name **urFluency**; lowercase `urfluency` for the
-CLI, Go module (`github.com/rburns629/urfluency-cli`), and URLs. Domain: urfluency.com.
+CLI, Go module (`github.com/roburns/urfluency-cli`), and URLs. Domain: urfluency.com.
 
 ## Purpose
 

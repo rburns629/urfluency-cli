@@ -21,7 +21,7 @@ func TestValidate(t *testing.T) {
 	// Text a real summary carries: URLs, ratios, versions, and a dated since.
 	ok := valid()
 	ok.Since = "2025-01-01"
-	ok.Summary = json.RawMessage(`{"headline":"See https://github.com/rburns629/clean-agent-code/blob/main/README.md","strengths":["Go: 84/100 (Advanced); 1,234 lines","Uses A:B ratios and v1.2.3"]}`)
+	ok.Summary = json.RawMessage(`{"headline":"See https://github.com/roburns/clean-agent-code/blob/main/README.md","strengths":["Go: 84/100 (Advanced); 1,234 lines","Uses A:B ratios and v1.2.3"]}`)
 	if err := Validate(ok); err != nil {
 		t.Errorf("ordinary summary text rejected: %v", err)
 	}

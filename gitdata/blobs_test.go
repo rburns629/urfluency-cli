@@ -6,8 +6,8 @@ import (
 	"sync"
 	"testing"
 
-	"github.com/rburns629/urfluency-cli/gitdata"
-	"github.com/rburns629/urfluency-cli/internal/testutil"
+	"github.com/roburns/urfluency-cli/gitdata"
+	"github.com/roburns/urfluency-cli/internal/testutil"
 )
 
 func TestBlobsMatchShow(t *testing.T) {

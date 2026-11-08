@@ -5,10 +5,10 @@ import (
 	"testing"
 	"time"
 
-	"github.com/rburns629/urfluency-cli/analysis"
-	_ "github.com/rburns629/urfluency-cli/analyzers/python"
-	"github.com/rburns629/urfluency-cli/gitdata"
-	"github.com/rburns629/urfluency-cli/internal/testutil"
+	"github.com/roburns/urfluency-cli/analysis"
+	_ "github.com/roburns/urfluency-cli/analyzers/python"
+	"github.com/roburns/urfluency-cli/gitdata"
+	"github.com/roburns/urfluency-cli/internal/testutil"
 )
 
 // TestFindingYears dates findings by their line's commit, and refuses a

@@ -1,10 +1,10 @@
 # urFluency
 
-[![urfluency: expert 85](https://urfluency.com/badge/repo/rburns629/urfluency-cli/code.svg)](https://urfluency.com/badges)
-[![urfluency tier: verified](https://urfluency.com/badge/repo/rburns629/urfluency-cli/tier.svg)](https://urfluency.com/badges)
-[![safety scan: no indicators](https://urfluency.com/badge/repo/rburns629/urfluency-cli/safety.svg)](https://urfluency.com/badges)
-[![go: expert 85](https://urfluency.com/badge/repo/rburns629/urfluency-cli/go.svg)](https://urfluency.com/badges)
-[![quality gates: expert 100](https://urfluency.com/badge/repo/rburns629/urfluency-cli/quality-gates.svg)](https://urfluency.com/badges)
+[![urfluency: expert 85](https://urfluency.com/badge/repo/roburns/urfluency-cli/code.svg)](https://urfluency.com/badges)
+[![urfluency tier: verified](https://urfluency.com/badge/repo/roburns/urfluency-cli/tier.svg)](https://urfluency.com/badges)
+[![safety scan: no indicators](https://urfluency.com/badge/repo/roburns/urfluency-cli/safety.svg)](https://urfluency.com/badges)
+[![go: expert 85](https://urfluency.com/badge/repo/roburns/urfluency-cli/go.svg)](https://urfluency.com/badges)
+[![quality gates: expert 100](https://urfluency.com/badge/repo/roburns/urfluency-cli/quality-gates.svg)](https://urfluency.com/badges)
 
 Rates the code you write, in 16 languages, and how you work with coding agents,
 from your own Git history. It runs on your machine: your code and prompts never

@@ -8,7 +8,7 @@ import (
 	"sync"
 	"time"
 
-	"github.com/rburns629/urfluency-cli/internal/report"
+	"github.com/roburns/urfluency-cli/internal/report"
 )
 
 // progress shows what a scan is doing on stderr, so the report on stdout stays

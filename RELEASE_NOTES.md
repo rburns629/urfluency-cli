@@ -9,6 +9,10 @@ sums up the release in one line. Each change is a bullet that starts with
 `New:`, `Improved:`, `Fixed:`, or `Security:`, written for people who use the
 CLI rather than for people who work on it.
 
+## v1.8.3 (2026-11-08)
+
+- Improved: The CLI's Go module is now github.com/roburns/urfluency-cli, matching its home on GitHub, and its README badges use the roburns name. Homebrew and download installs are unchanged.
+
 ## v1.8.2 (2026-11-08)
 
 - Improved: The CLI's home on GitHub is now roburns/urfluency-cli, and Homebrew installs it with brew install roburns/tap/urfluency. Update notices, download links, and the links to the clean-agent-code standards use the new name. An existing install keeps upgrading with brew upgrade urfluency, and the old names redirect.

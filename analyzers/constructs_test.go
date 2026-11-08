@@ -5,9 +5,9 @@ import (
 	"strings"
 	"testing"
 
-	"github.com/rburns629/urfluency-cli/analysis"
-	_ "github.com/rburns629/urfluency-cli/analyzers/all"
-	"github.com/rburns629/urfluency-cli/rules"
+	"github.com/roburns/urfluency-cli/analysis"
+	_ "github.com/roburns/urfluency-cli/analyzers/all"
+	"github.com/roburns/urfluency-cli/rules"
 )
 
 // The constructs of Ruby, Shell, PHP, C, and Java each count what they

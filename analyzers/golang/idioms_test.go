@@ -5,8 +5,8 @@ import (
 	"strings"
 	"testing"
 
-	"github.com/rburns629/urfluency-cli/analysis"
-	"github.com/rburns629/urfluency-cli/rules"
+	"github.com/roburns/urfluency-cli/analysis"
+	"github.com/roburns/urfluency-cli/rules"
 )
 
 // positives returns the idiom rules found in the source.

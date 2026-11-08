@@ -42,7 +42,7 @@ jobs:
       - name: Replay the fuzz corpus with AddressSanitizer
         if: success() || failure()
         run: |
-          corpus="$(go env GOCACHE)/fuzz/github.com/rburns629/urfluency-cli/analyzers/fuzz/FuzzAnalyzers"
+          corpus="$(go env GOCACHE)/fuzz/github.com/roburns/urfluency-cli/analyzers/fuzz/FuzzAnalyzers"
           mkdir -p analyzers/fuzz/testdata/fuzz/FuzzAnalyzers
           if [ -d "$corpus" ]; then cp "$corpus"/* analyzers/fuzz/testdata/fuzz/FuzzAnalyzers/; fi
           echo "replaying $(ls analyzers/fuzz/testdata/fuzz/FuzzAnalyzers | wc -l) inputs"

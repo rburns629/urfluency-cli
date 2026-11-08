@@ -4,7 +4,7 @@ import (
 	"slices"
 	"testing"
 
-	"github.com/rburns629/urfluency-cli/analysis"
+	"github.com/roburns/urfluency-cli/analysis"
 )
 
 func TestFrameworks(t *testing.T) {

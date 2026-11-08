@@ -14,8 +14,8 @@ import (
 	"sync/atomic"
 	"time"
 
-	"github.com/rburns629/urfluency-cli/gitdata"
-	"github.com/rburns629/urfluency-cli/rules"
+	"github.com/roburns/urfluency-cli/gitdata"
+	"github.com/roburns/urfluency-cli/rules"
 )
 
 // dependencyDirs hold installed packages, environments, and package caches, not

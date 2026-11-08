@@ -3,10 +3,10 @@ package report
 import (
 	"testing"
 
-	"github.com/rburns629/urfluency-cli/analysis"
-	"github.com/rburns629/urfluency-cli/rules"
+	"github.com/roburns/urfluency-cli/analysis"
+	"github.com/roburns/urfluency-cli/rules"
 
-	_ "github.com/rburns629/urfluency-cli/analyzers/golang"
+	_ "github.com/roburns/urfluency-cli/analyzers/golang"
 )
 
 func goIdioms() map[string]analysis.IdiomUse {

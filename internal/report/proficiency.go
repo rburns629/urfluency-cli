@@ -6,8 +6,8 @@ import (
 	"sort"
 	"strings"
 
-	"github.com/rburns629/urfluency-cli/analysis"
-	"github.com/rburns629/urfluency-cli/rules"
+	"github.com/roburns/urfluency-cli/analysis"
+	"github.com/roburns/urfluency-cli/rules"
 )
 
 // ProficiencyModel versions the scoring below. Its constants are reasoned

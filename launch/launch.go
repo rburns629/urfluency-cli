@@ -8,7 +8,7 @@ import (
 	"os"
 	"os/signal"
 
-	"github.com/rburns629/urfluency-cli/internal/cli"
+	"github.com/roburns/urfluency-cli/internal/cli"
 )
 
 // Main runs urfluency with the process's arguments and exits.

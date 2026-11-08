@@ -5,7 +5,7 @@ import (
 
 	ts "github.com/tree-sitter/go-tree-sitter"
 
-	"github.com/rburns629/urfluency-cli/parsing"
+	"github.com/roburns/urfluency-cli/parsing"
 )
 
 // method is one member function declared in a class body.

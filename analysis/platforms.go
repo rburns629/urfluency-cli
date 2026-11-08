@@ -7,7 +7,7 @@ import (
 	"strings"
 	"time"
 
-	"github.com/rburns629/urfluency-cli/gitdata"
+	"github.com/roburns/urfluency-cli/gitdata"
 )
 
 // PlatformUse is how much the user worked with one platform, such as AWS or

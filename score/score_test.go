@@ -9,9 +9,9 @@ import (
 	"testing"
 	"time"
 
-	"github.com/rburns629/urfluency-cli/analysis"
-	"github.com/rburns629/urfluency-cli/internal/testutil"
-	"github.com/rburns629/urfluency-cli/score"
+	"github.com/roburns/urfluency-cli/analysis"
+	"github.com/roburns/urfluency-cli/internal/testutil"
+	"github.com/roburns/urfluency-cli/score"
 )
 
 // goFile returns a Go file of n small functions that wrap their errors.

@@ -6,8 +6,8 @@ import (
 	"testing"
 	"time"
 
-	"github.com/rburns629/urfluency-cli/analysis"
-	"github.com/rburns629/urfluency-cli/upload"
+	"github.com/roburns/urfluency-cli/analysis"
+	"github.com/roburns/urfluency-cli/upload"
 )
 
 func TestBuildPersona(t *testing.T) {

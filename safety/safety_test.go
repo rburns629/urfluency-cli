@@ -9,7 +9,7 @@ import (
 	"strings"
 	"testing"
 
-	"github.com/rburns629/urfluency-cli/internal/testutil"
+	"github.com/roburns/urfluency-cli/internal/testutil"
 )
 
 func write(t *testing.T, dir string, files map[string]string) {

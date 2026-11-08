@@ -11,7 +11,7 @@ import (
 	"strconv"
 	"strings"
 
-	"github.com/rburns629/urfluency-cli/analysis"
+	"github.com/roburns/urfluency-cli/analysis"
 )
 
 // RuntimeAdvisory is a known vulnerability in a language runtime a project

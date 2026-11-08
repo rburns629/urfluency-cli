@@ -7,8 +7,8 @@ import (
 	"sort"
 	"testing"
 
-	"github.com/rburns629/urfluency-cli/analysis"
-	"github.com/rburns629/urfluency-cli/rules"
+	"github.com/roburns/urfluency-cli/analysis"
+	"github.com/roburns/urfluency-cli/rules"
 )
 
 func analyze(t *testing.T, src string) []analysis.Finding {
