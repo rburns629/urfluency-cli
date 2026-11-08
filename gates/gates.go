@@ -61,7 +61,7 @@ func (s Set) Has(name string) bool {
 }
 
 // Standard is the clean-agent-code document that defines the gates.
-const Standard = "https://github.com/rburns629/clean-agent-code/blob/main/standards/QUALITY_GATES.md"
+const Standard = "https://github.com/rotburn/clean-agent-code/blob/main/standards/QUALITY_GATES.md"
 
 var patterns = []struct {
 	gate string

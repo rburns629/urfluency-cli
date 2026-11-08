@@ -2,7 +2,7 @@ name: Release
 
 # Tagging vMAJOR.MINOR.PATCH builds each platform natively (tree-sitter uses cgo),
 # publishes the archives and checksums to a GitHub Release, and updates the
-# Homebrew formula in rburns629/homebrew-tap when HOMEBREW_TAP_TOKEN is set.
+# Homebrew formula in rotburn/homebrew-tap when HOMEBREW_TAP_TOKEN is set.
 #
 # Or start one from Actions → Release → Run workflow on main, with a version:
 # that run checks CI passed on main's latest commit, tags it, and starts the
@@ -119,7 +119,7 @@ jobs:
       - name: Check out the private engine
         uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7.0.1
         with:
-          repository: rburns629/urfluency-engine
+          repository: rotburn/urfluency-engine
           path: engine
           token: ${{ secrets.ENGINE_READ_TOKEN }}
           persist-credentials: false
@@ -210,7 +210,7 @@ jobs:
         run: |
           version="${GITHUB_REF_NAME#v}"
           scripts/render-formula.sh "$version" dist > urfluency.rb
-          git clone --depth 1 "https://x-access-token:${TAP_TOKEN}@github.com/rburns629/homebrew-tap.git" tap
+          git clone --depth 1 "https://x-access-token:${TAP_TOKEN}@github.com/rotburn/homebrew-tap.git" tap
           mkdir -p tap/Formula
           cp urfluency.rb tap/Formula/urfluency.rb
           cd tap
