@@ -129,8 +129,8 @@ func languageLevel(e Evidence, score int) string {
 // lines count instead: medium from 2,000, high from 10,000.
 const evidenceFull = 320
 
-// languageConfidence is how much a language's rating rests on. Volume sets
-// confidence, never the score.
+// languageConfidence is how much a language's rating rests on. Volume also
+// weighs the score (byVolume).
 func languageConfidence(lr analysis.LanguageResult) string {
 	amount, full := lr.OwnedLines, 2000
 	if e := lr.Evidence; e != nil && e.Functions > 0 {
