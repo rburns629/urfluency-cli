@@ -81,10 +81,10 @@ operated, not by CLI versus website.
 
 | Repository | Visibility | Contents |
 | --- | --- | --- |
-| `rburns629/urfluency-cli` | Public, open source | The CLI; the analyzers and the baseline rules; the extension point (`analysis.RegisterExtension`); the upload format (the CLI-to-API contract); the scoring formula that turns rule counts into bands; and the safety scanner's detection engine. Building `cmd/urfluency` gives the community engine |
-| `rburns629/urfluency-engine` | Private | The private engine: rules registered as extensions, the per-language benchmarks and parity tooling, and the official CLI build, which Homebrew installs; the hosted scanner and the API import it too |
-| `rburns629/urfluency-app` | Private | The website and dashboard, API and accounts, badge serving, the hosted scan service (job queue, isolated workers, rate limits, abuse controls), and infrastructure and deployment configuration |
-| `rburns629/homebrew-tap` | Public | The Homebrew formula |
+| `rotburn/urfluency-cli` | Public, open source | The CLI; the analyzers and the baseline rules; the extension point (`analysis.RegisterExtension`); the upload format (the CLI-to-API contract); the scoring formula that turns rule counts into bands; and the safety scanner's detection engine. Building `cmd/urfluency` gives the community engine |
+| `rotburn/urfluency-engine` | Private | The private engine: rules registered as extensions, the per-language benchmarks and parity tooling, and the official CLI build, which Homebrew installs; the hosted scanner and the API import it too |
+| `rotburn/urfluency-app` | Private | The website and dashboard, API and accounts, badge serving, the hosted scan service (job queue, isolated workers, rate limits, abuse controls), and infrastructure and deployment configuration |
+| `rotburn/homebrew-tap` | Public | The Homebrew formula |
 
 - **Why.** What leaves an engineer's laptop can always be audited: the upload code
   is public, an upload holds counts and never code, and `upload --dry-run` prints
@@ -102,7 +102,7 @@ operated, not by CLI versus website.
 - **Local safety checks.** Because the scanner engine is public, the CLI can check a
   repository locally: `urfluency check <git-url>` clones into a temporary directory and
   scans without executing anything.
-- **Homebrew.** `brew install rburns629/tap/urfluency` installs a prebuilt binary.
+- **Homebrew.** `brew install rotburn/tap/urfluency` installs a prebuilt binary.
   Tagging a version runs a release workflow that builds natively on macOS (Apple
   Silicon and Intel) and Linux (x86-64 and ARM), because tree-sitter uses cgo;
   publishes tarballs with SHA-256 checksums to a GitHub Release; and updates the
@@ -830,7 +830,7 @@ a project already configures (ESLint, Ruff, golangci-lint) remain optional adapt
 urFluency measures whether the practices clean-agent-code defines actually happen:
 
 - **Quality gates.** `gates` names the gates of
-  [QUALITY_GATES.md](https://github.com/rburns629/clean-agent-code/blob/main/standards/QUALITY_GATES.md)
+  [QUALITY_GATES.md](https://github.com/rotburn/clean-agent-code/blob/main/standards/QUALITY_GATES.md)
   (format, lint, types, build, tests, security) and the commands that run them.
   CI the user helped write is checked against the mandatory gates that apply to
   its languages, and the AI engineering section shows which gates agents ran in

@@ -92,7 +92,7 @@ func (e *AIEngineering) addParity(l Language) {
 			Title:    fmt.Sprintf("Agent-assisted %s falls below your own bar", name),
 			Detail:   detail + ".",
 			Focus:    "Review agent changes for these rules before committing, and add them to the project's linters and agent instructions so the agent stops producing them.",
-			Standard: "https://github.com/rburns629/clean-agent-code",
+			Standard: "https://github.com/rotburn/clean-agent-code",
 		})
 	}
 }
