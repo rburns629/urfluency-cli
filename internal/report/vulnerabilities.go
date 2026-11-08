@@ -7,7 +7,7 @@ import (
 	"strings"
 	"time"
 
-	"github.com/rburns629/urfluency-cli/vulns"
+	"github.com/roburns/urfluency-cli/vulns"
 )
 
 // Vulnerabilities are known vulnerabilities in the scanned projects' locked

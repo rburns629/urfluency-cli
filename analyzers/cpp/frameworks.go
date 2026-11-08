@@ -6,8 +6,8 @@ import (
 
 	ts "github.com/tree-sitter/go-tree-sitter"
 
-	"github.com/rburns629/urfluency-cli/analysis"
-	"github.com/rburns629/urfluency-cli/parsing"
+	"github.com/roburns/urfluency-cli/analysis"
+	"github.com/roburns/urfluency-cli/parsing"
 )
 
 // Frameworks returns the libraries a file includes, sorted.

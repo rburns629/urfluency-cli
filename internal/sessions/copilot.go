@@ -8,7 +8,7 @@ import (
 	"strings"
 	"time"
 
-	"github.com/rburns629/urfluency-cli/gates"
+	"github.com/roburns/urfluency-cli/gates"
 )
 
 // copilotSession is the part of a VS Code chat session urFluency reads.

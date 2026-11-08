@@ -10,8 +10,8 @@ import (
 	"path/filepath"
 	"strings"
 
-	"github.com/rburns629/urfluency-cli/internal/report"
-	"github.com/rburns629/urfluency-cli/safety"
+	"github.com/roburns/urfluency-cli/internal/report"
+	"github.com/roburns/urfluency-cli/safety"
 )
 
 // check scans a repository for signs of malicious behavior before it is run.

@@ -7,9 +7,9 @@ import (
 	"testing"
 	"time"
 
-	"github.com/rburns629/urfluency-cli/analysis"
-	_ "github.com/rburns629/urfluency-cli/analyzers/golang"
-	"github.com/rburns629/urfluency-cli/facts"
+	"github.com/roburns/urfluency-cli/analysis"
+	_ "github.com/roburns/urfluency-cli/analyzers/golang"
+	"github.com/roburns/urfluency-cli/facts"
 )
 
 func result(owned int, rules ...string) analysis.Result {

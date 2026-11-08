@@ -16,7 +16,7 @@ import (
 	"strings"
 	"time"
 
-	"github.com/rburns629/urfluency-cli/gates"
+	"github.com/roburns/urfluency-cli/gates"
 )
 
 // Session is what urFluency keeps from one transcript.

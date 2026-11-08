@@ -15,9 +15,9 @@ import (
 	"testing"
 	"time"
 
-	"github.com/rburns629/urfluency-cli/internal/report"
-	"github.com/rburns629/urfluency-cli/internal/sessions"
-	"github.com/rburns629/urfluency-cli/internal/testutil"
+	"github.com/roburns/urfluency-cli/internal/report"
+	"github.com/roburns/urfluency-cli/internal/sessions"
+	"github.com/roburns/urfluency-cli/internal/testutil"
 )
 
 func TestParseSince(t *testing.T) {

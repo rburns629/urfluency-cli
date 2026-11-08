@@ -4,7 +4,7 @@ import (
 	"testing"
 	"time"
 
-	"github.com/rburns629/urfluency-cli/gitdata"
+	"github.com/roburns/urfluency-cli/gitdata"
 )
 
 func TestToolOf(t *testing.T) {

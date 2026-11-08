@@ -4,7 +4,7 @@ import (
 	"strings"
 	"testing"
 
-	"github.com/rburns629/urfluency-cli/analysis"
+	"github.com/roburns/urfluency-cli/analysis"
 )
 
 func TestBuildPlatforms(t *testing.T) {

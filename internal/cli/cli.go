@@ -17,13 +17,13 @@ import (
 	"strings"
 	"time"
 
-	"github.com/rburns629/urfluency-cli/analysis"
-	"github.com/rburns629/urfluency-cli/facts"
-	"github.com/rburns629/urfluency-cli/gitdata"
-	"github.com/rburns629/urfluency-cli/internal/report"
-	"github.com/rburns629/urfluency-cli/internal/sessions"
+	"github.com/roburns/urfluency-cli/analysis"
+	"github.com/roburns/urfluency-cli/facts"
+	"github.com/roburns/urfluency-cli/gitdata"
+	"github.com/roburns/urfluency-cli/internal/report"
+	"github.com/roburns/urfluency-cli/internal/sessions"
 
-	_ "github.com/rburns629/urfluency-cli/analyzers/all" // every analyzer
+	_ "github.com/roburns/urfluency-cli/analyzers/all" // every analyzer
 )
 
 // Version is set at build time with -ldflags "-X .../internal/cli.Version=...".

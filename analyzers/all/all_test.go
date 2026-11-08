@@ -4,7 +4,7 @@ import (
 	"os"
 	"testing"
 
-	"github.com/rburns629/urfluency-cli/analysis"
+	"github.com/roburns/urfluency-cli/analysis"
 )
 
 // Every analyzer package under analyzers/ must be registered here.

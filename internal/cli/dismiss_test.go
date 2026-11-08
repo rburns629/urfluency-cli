@@ -9,7 +9,7 @@ import (
 	"strings"
 	"testing"
 
-	"github.com/rburns629/urfluency-cli/internal/testutil"
+	"github.com/roburns/urfluency-cli/internal/testutil"
 )
 
 // secretFindings scans dir and returns how many sec.hardcoded-password

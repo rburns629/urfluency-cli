@@ -5,9 +5,9 @@ import (
 	"sort"
 	"strings"
 
-	"github.com/rburns629/urfluency-cli/gates"
+	"github.com/roburns/urfluency-cli/gates"
 
-	"github.com/rburns629/urfluency-cli/analysis"
+	"github.com/roburns/urfluency-cli/analysis"
 )
 
 // AIEngineering answers one question: does the user's agent-assisted work hold up

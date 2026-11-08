@@ -10,10 +10,10 @@ import (
 	"testing"
 	"time"
 
-	"github.com/rburns629/urfluency-cli/analysis"
-	"github.com/rburns629/urfluency-cli/parsing"
+	"github.com/roburns/urfluency-cli/analysis"
+	"github.com/roburns/urfluency-cli/parsing"
 
-	_ "github.com/rburns629/urfluency-cli/analyzers/all" // every analyzer
+	_ "github.com/roburns/urfluency-cli/analyzers/all" // every analyzer
 )
 
 // seeds are small, valid-looking files in each language, with the

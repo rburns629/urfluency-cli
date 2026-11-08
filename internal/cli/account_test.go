@@ -21,8 +21,8 @@ import (
 	"testing"
 	"time"
 
-	"github.com/rburns629/urfluency-cli/safety"
-	"github.com/rburns629/urfluency-cli/upload"
+	"github.com/roburns/urfluency-cli/safety"
+	"github.com/roburns/urfluency-cli/upload"
 )
 
 // fakeAPI serves CLI login and the signed endpoints, checking PKCE and each

@@ -10,12 +10,12 @@ import (
 	"testing"
 	"time"
 
-	"github.com/rburns629/urfluency-cli/analysis"
-	_ "github.com/rburns629/urfluency-cli/analyzers/golang"
-	_ "github.com/rburns629/urfluency-cli/analyzers/javascript"
-	_ "github.com/rburns629/urfluency-cli/analyzers/secrets"
-	"github.com/rburns629/urfluency-cli/gitdata"
-	"github.com/rburns629/urfluency-cli/internal/testutil"
+	"github.com/roburns/urfluency-cli/analysis"
+	_ "github.com/roburns/urfluency-cli/analyzers/golang"
+	_ "github.com/roburns/urfluency-cli/analyzers/javascript"
+	_ "github.com/roburns/urfluency-cli/analyzers/secrets"
+	"github.com/roburns/urfluency-cli/gitdata"
+	"github.com/roburns/urfluency-cli/internal/testutil"
 )
 
 const theirs = `package a

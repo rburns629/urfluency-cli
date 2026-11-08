@@ -5,8 +5,8 @@ import (
 
 	ts "github.com/tree-sitter/go-tree-sitter"
 
-	"github.com/rburns629/urfluency-cli/analysis"
-	"github.com/rburns629/urfluency-cli/parsing"
+	"github.com/roburns/urfluency-cli/analysis"
+	"github.com/roburns/urfluency-cli/parsing"
 )
 
 func (c *checker) idiom(rule string, n *ts.Node) {

@@ -3,7 +3,7 @@ package cli
 import (
 	"testing"
 
-	"github.com/rburns629/urfluency-cli/analysis"
+	"github.com/roburns/urfluency-cli/analysis"
 )
 
 // TestAnalyzersClaimDistinctExtensions checks that, with every analyzer the CLI

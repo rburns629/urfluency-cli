@@ -5,7 +5,7 @@ import (
 	"sort"
 	"strings"
 
-	"github.com/rburns629/urfluency-cli/analysis"
+	"github.com/roburns/urfluency-cli/analysis"
 )
 
 // Platform is how much the user worked with one platform, such as AWS or

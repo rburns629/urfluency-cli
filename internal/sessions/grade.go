@@ -4,7 +4,7 @@ import (
 	"regexp"
 	"strings"
 
-	"github.com/rburns629/urfluency-cli/gates"
+	"github.com/roburns/urfluency-cli/gates"
 )
 
 // Task types. Prompts are graded by what they ask for: a bug with an evident

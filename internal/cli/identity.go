@@ -8,8 +8,8 @@ import (
 	"strings"
 	"sync"
 
-	"github.com/rburns629/urfluency-cli/gitdata"
-	"github.com/rburns629/urfluency-cli/internal/identity"
+	"github.com/roburns/urfluency-cli/gitdata"
+	"github.com/roburns/urfluency-cli/internal/identity"
 )
 
 // detectIdentity works out the user's commit addresses across the repositories.

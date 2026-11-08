@@ -10,8 +10,8 @@ import (
 	"testing"
 	"time"
 
-	"github.com/rburns629/urfluency-cli/gitdata"
-	"github.com/rburns629/urfluency-cli/internal/testutil"
+	"github.com/roburns/urfluency-cli/gitdata"
+	"github.com/roburns/urfluency-cli/internal/testutil"
 )
 
 func TestOwnedLines(t *testing.T) {

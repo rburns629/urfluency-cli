@@ -7,9 +7,9 @@ import (
 	"strconv"
 	"strings"
 
-	"github.com/rburns629/urfluency-cli/analysis"
-	"github.com/rburns629/urfluency-cli/facts"
-	"github.com/rburns629/urfluency-cli/rules"
+	"github.com/roburns/urfluency-cli/analysis"
+	"github.com/roburns/urfluency-cli/facts"
+	"github.com/roburns/urfluency-cli/rules"
 )
 
 // Summary answers whether the user is proficient: ratings for every area the

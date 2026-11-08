@@ -13,9 +13,9 @@ import (
 	"strings"
 	"time"
 
-	"github.com/rburns629/urfluency-cli/internal/report"
-	"github.com/rburns629/urfluency-cli/safety"
-	"github.com/rburns629/urfluency-cli/vulns"
+	"github.com/roburns/urfluency-cli/internal/report"
+	"github.com/roburns/urfluency-cli/safety"
+	"github.com/roburns/urfluency-cli/vulns"
 )
 
 // Dependency checks look up each project's locked package versions in OSV.

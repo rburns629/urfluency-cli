@@ -10,7 +10,7 @@ import (
 	"strings"
 	"time"
 
-	"github.com/rburns629/urfluency-cli/internal/sessions"
+	"github.com/roburns/urfluency-cli/internal/sessions"
 )
 
 // validate prints, for each prompt signal, what happened in tasks whose prompt

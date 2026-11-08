@@ -9,8 +9,8 @@ import (
 	"strings"
 	"testing"
 
-	"github.com/rburns629/urfluency-cli/internal/testutil"
-	"github.com/rburns629/urfluency-cli/upload"
+	"github.com/roburns/urfluency-cli/internal/testutil"
+	"github.com/roburns/urfluency-cli/upload"
 )
 
 // attest asks GitHub for a token for the API's audience and sends the

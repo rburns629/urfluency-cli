@@ -14,7 +14,7 @@ version=$1
 out=$2
 # The pinned image is in scripts/release/Dockerfile, where Dependabot sees it.
 image=$(sed -n 's/^FROM //p' "$(dirname "$0")/release/Dockerfile")
-ldflags="-s -w -X github.com/rburns629/urfluency-cli/internal/cli.Version=$version"
+ldflags="-s -w -X github.com/roburns/urfluency-cli/internal/cli.Version=$version"
 pkg=${PACKAGE:-./cmd/urfluency}
 mkdir -p "$out"
 work=$(mktemp -d)

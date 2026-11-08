@@ -6,7 +6,7 @@ import (
 	"os"
 	"testing"
 
-	"github.com/rburns629/urfluency-cli/vulns"
+	"github.com/roburns/urfluency-cli/vulns"
 )
 
 // TestMain keeps tests away from the developer's saved settings, cache, and

@@ -2,6 +2,6 @@
 // rules in this repository.
 package main
 
-import "github.com/rburns629/urfluency-cli/launch"
+import "github.com/roburns/urfluency-cli/launch"
 
 func main() { launch.Main() }

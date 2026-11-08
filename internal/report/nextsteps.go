@@ -6,8 +6,8 @@ import (
 	"sort"
 	"strings"
 
-	"github.com/rburns629/urfluency-cli/gates"
-	"github.com/rburns629/urfluency-cli/rules"
+	"github.com/roburns/urfluency-cli/gates"
+	"github.com/roburns/urfluency-cli/rules"
 )
 
 // Step is one change that would raise a rating, with the rating the scoring

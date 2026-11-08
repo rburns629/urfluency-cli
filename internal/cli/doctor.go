@@ -12,7 +12,7 @@ import (
 	"strings"
 	"time"
 
-	"github.com/rburns629/urfluency-cli/internal/sessions"
+	"github.com/roburns/urfluency-cli/internal/sessions"
 )
 
 // localRuntime is a local model runtime the experimental reviews can use. Only

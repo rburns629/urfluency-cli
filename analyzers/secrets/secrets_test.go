@@ -9,7 +9,7 @@ import (
 	"strings"
 	"testing"
 
-	"github.com/rburns629/urfluency-cli/analysis"
+	"github.com/roburns/urfluency-cli/analysis"
 )
 
 // URFLUENCY-CANARY: every credential in this file is synthetic. Fake

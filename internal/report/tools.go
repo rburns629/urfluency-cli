@@ -5,7 +5,7 @@ import (
 	"sort"
 	"strings"
 
-	"github.com/rburns629/urfluency-cli/analysis"
+	"github.com/roburns/urfluency-cli/analysis"
 )
 
 // Tool is how much the user worked with one tool, from the files they committed

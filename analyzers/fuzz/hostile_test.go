@@ -7,8 +7,8 @@ import (
 	"testing"
 	"time"
 
-	"github.com/rburns629/urfluency-cli/analysis"
-	"github.com/rburns629/urfluency-cli/parsing"
+	"github.com/roburns/urfluency-cli/analysis"
+	"github.com/roburns/urfluency-cli/parsing"
 )
 
 func analyzeTime(t *testing.T, path, src string) time.Duration {

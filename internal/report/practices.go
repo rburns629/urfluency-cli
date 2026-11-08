@@ -5,8 +5,8 @@ import (
 	"slices"
 	"strings"
 
-	"github.com/rburns629/urfluency-cli/analysis"
-	"github.com/rburns629/urfluency-cli/gates"
+	"github.com/roburns/urfluency-cli/analysis"
+	"github.com/roburns/urfluency-cli/gates"
 )
 
 // Practices are engineering habits measured from code and history. They are
