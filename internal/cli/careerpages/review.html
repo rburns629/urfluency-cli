@@ -1,0 +1,157 @@
+<!doctype html>
+<html lang="en">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1">
+<title>Review your drafts · urfluency career</title>
+<style>
+:root{--bg:#F6F7F5;--card:#FFFFFF;--line:#E4E7E2;--ink:#111411;--muted:#4B524A;--faint:#6B7369;--greenInk:#166534;--greenBg:#DCFCE7;--amberInk:#92400E;--amberBg:#FEF3C7;--blueInk:#1E40AF;--blueBg:#DBEAFE}
+*{box-sizing:border-box}
+body{margin:0;background:var(--bg);color:var(--ink);font:15px/1.5 system-ui,-apple-system,"Segoe UI",sans-serif}
+.mono{font-family:ui-monospace,SFMono-Regular,Menlo,monospace}
+header{background:var(--card);border-bottom:1px solid var(--line)}
+header div,main{max-width:1240px;margin:0 auto;padding:14px 24px}
+header div{display:flex;flex-wrap:wrap;gap:12px;justify-content:space-between;align-items:center}
+.chip{font-size:12px;padding:4px 8px;border-radius:6px;background:#F1F3EF;color:var(--muted)}
+main{display:flex;flex-direction:column;gap:16px;padding-bottom:80px}
+h1{margin:8px 0 0;font-size:26px;letter-spacing:-.02em}
+h2{margin:0;font-size:12px;font-weight:600;color:var(--faint);text-transform:uppercase;letter-spacing:.08em}
+.layout{display:flex;flex-wrap:wrap;gap:16px;align-items:flex-start}
+.doc{flex:999 1 640px;min-width:0;display:flex;flex-direction:column;gap:16px}
+aside{flex:1 1 320px;min-width:0;display:flex;flex-direction:column;gap:16px;position:sticky;top:12px}
+.card{background:var(--card);border:1px solid var(--line);border-radius:14px;padding:22px;display:flex;flex-direction:column;gap:12px}
+.paper{background:#fff;border:1px solid #D5DAD2;border-radius:4px;padding:44px 52px;font:13px/1.5 Arial,Helvetica,sans-serif;color:#111;display:flex;flex-direction:column;gap:12px}
+.paper h3{margin:0;font-size:12.5px;text-transform:uppercase;letter-spacing:.06em;border-bottom:1px solid #111;padding-bottom:3px}
+.paper ul{margin:2px 0 0;padding-left:18px}
+.s{border:0;padding:1px 2px;margin:0 -2px;border-radius:3px;font:inherit;color:inherit;text-align:left;cursor:pointer;background:transparent;display:inline}
+.marks .s.git{background:var(--greenBg)}.marks .s.you{background:var(--blueBg)}
+.s[aria-pressed="true"]{box-shadow:0 0 0 2px var(--ink)}
+.para{margin:0;line-height:1.65}
+button.b{font:inherit;font-size:14px;font-weight:600;min-height:44px;padding:0 14px;border-radius:10px;border:1px solid #D5DAD2;background:var(--card);color:var(--ink);cursor:pointer}
+button.b[aria-pressed="true"],button.primary{background:var(--ink);color:#fff;border-color:var(--ink)}
+.ev{padding:10px 12px;border-radius:9px;font-size:13px;display:flex;flex-direction:column;gap:2px}
+.ev.git{background:var(--greenBg);color:var(--greenInk)}.ev.you{background:var(--blueBg);color:var(--blueInk)}
+.muted{color:var(--muted);font-size:14px}.count{font-size:12px;color:var(--faint)}
+.tag{font-size:12px;padding:4px 8px;border-radius:6px}.ok{background:var(--greenBg);color:var(--greenInk)}.over{background:var(--amberBg);color:var(--amberInk)}
+.toolbar{display:flex;flex-wrap:wrap;gap:8px;align-items:center}
+li.cut{display:grid;grid-template-columns:1fr auto;gap:8px;align-items:center;padding:8px 0;border-top:1px solid #F1F3EF}
+@media print{header,aside,.toolbar,.noprint{display:none}.paper{border:0;padding:0}}
+</style>
+</head>
+<body>
+<header><div><strong class="mono">&gt;_ urfluency career review</strong><span class="chip mono">served by your CLI on 127.0.0.1 · nothing kept on urfluency.com</span></div></header>
+<main>
+  <div><h1 id="title">Review your drafts</h1><p class="muted" id="intro"></p></div>
+  <div class="toolbar noprint" id="toolbar"></div>
+  <div class="layout marks" id="layout">
+    <div class="doc" id="doc"></div>
+    <aside>
+      <section class="card"><h2>What this rests on</h2><p id="sel" class="muted">Click a sentence to see the commits or answers behind it.</p><div id="ev" style="display:flex;flex-direction:column;gap:8px"></div><div id="selact"></div></section>
+      <section class="card" id="cutcard" hidden><h2>Cut for one page</h2><ul id="cuts" style="margin:0;padding:0;list-style:none"></ul></section>
+      <section class="card" id="impliedcard" hidden><h2>Skills to check</h2><p class="muted">Your work implies these, but no evidence names them. Keep only what you'd be glad to be asked about.</p><div id="implied" style="display:flex;flex-direction:column;gap:8px"></div></section>
+      <section class="card" id="droppedcard" hidden><h2>Left out by the checks</h2><ul id="dropped" style="margin:0;padding-left:18px;display:flex;flex-direction:column;gap:6px;font-size:13px"></ul></section>
+    </aside>
+  </div>
+</main>
+<script>
+const token = location.pathname.split("/")[1];
+let S = null, sel = null, onePage = true, marks = true;
+const cut = new Set(), restored = new Set(), drop = new Set();
+function h(tag, props, ...kids) {
+  const el = document.createElement(tag);
+  for (const [k, v] of Object.entries(props || {})) {
+    if (k === "on") for (const [ev, fn] of Object.entries(v)) el.addEventListener(ev, fn);
+    else if (k === "class") el.className = v; else el.setAttribute(k, v);
+  }
+  for (const kid of kids.flat()) if (kid != null) el.append(typeof kid === "string" ? document.createTextNode(kid) : kid);
+  return el;
+}
+const roleOf = (id) => S.roles.find((r) => r.id === id) || {};
+const titleOf = (r) => (r.official || r.title) + (r.note ? ` (${r.note})` : "");
+const kindOf = (s) => s.cites.some((c) => S.cites[c] && S.cites[c].kind === "you") ? "you" : "git";
+function sentence(s, key) {
+  return h("button", {type: "button", class: `s ${kindOf(s)}`, "aria-pressed": String(sel && sel.key === key), on: {click: () => { sel = {s, key}; render(); }}}, s.text);
+}
+const len = (paras) => paras.map((p) => p.map((s) => s.text).join(" ")).join("\n\n").length;
+function linkedIn(d) {
+  document.getElementById("intro").textContent = "Continuous paragraphs, as LinkedIn shows them. Each sentence cites your commits or your answers; click one to see which.";
+  const out = [];
+  const section = (title, meta, limit, length, body, copy) => h("section", {class: "card"},
+    h("div", {style: "display:flex;flex-wrap:wrap;justify-content:space-between;gap:8px;align-items:baseline"}, h("div", {}, h("strong", {style: "font-size:18px"}, title), meta ? h("div", {class: "muted"}, meta) : null),
+      h("span", {class: "count mono"}, `${length.toLocaleString()} / ${limit.toLocaleString()}`)), body,
+    h("div", {class: "toolbar"}, h("button", {class: "b", type: "button", on: {click: (e) => { navigator.clipboard.writeText(copy); e.target.textContent = "Copied"; }}}, "Copy")));
+  if (d.headline) out.push(section("Headline", "", 220, d.headline.length, h("p", {class: "para"}, d.headline), d.headline));
+  const about = d.about || [];
+  out.push(section("About", "", 2600, len(about), about.map((p, i) => h("p", {class: "para"}, p.map((s, j) => [sentence(s, `a${i}.${j}`), " "]))), about.map((p) => p.map((s) => s.text).join(" ")).join("\n\n")));
+  for (const r of d.roles) {
+    const ro = roleOf(r.role), paras = r.paragraphs || [];
+    const text = paras.map((p) => p.map((s) => s.text).join(" ")).join("\n\n") + (r.further ? "\n\n" + r.further : "");
+    out.push(section(titleOf(ro), `${ro.company || ""} · ${ro.start} – ${ro.end || "present"}`, 2000, text.length,
+      [paras.map((p, i) => h("p", {class: "para"}, p.map((s, j) => [sentence(s, `${r.role}.${i}.${j}`), " "]))), r.further ? h("p", {class: "para"}, r.further) : null,
+        r.skills && r.skills.length ? h("p", {class: "muted"}, "Skills: " + r.skills.join(" · ")) : null], text));
+  }
+  return out;
+}
+const shown = (r, b) => !onePage || (b.keep && !cut.has(`${r.role}:${b.rank}`)) || restored.has(`${r.role}:${b.rank}`);
+function resume(d) {
+  document.getElementById("intro").textContent = "Drafted from the same map and answers as your LinkedIn entries. On one page, the lowest-ranked bullets are cut; bring any back.";
+  const tb = document.getElementById("toolbar");
+  let lines = 14 + Math.ceil((d.summary || []).map((s) => s.text).join(" ").length / 108) + Math.ceil((d.competencies || []).join(" | ").length / 108) + Math.ceil((d.skills || []).concat(d.implied || []).join(" | ").length / 108);
+  for (const r of d.roles) { lines += 2; for (const b of r.bullets || []) if (shown(r, b)) lines += Math.ceil(b.text.length / 104); }
+  const over = onePage && lines > 66;
+  tb.replaceChildren(
+    h("button", {class: "b", type: "button", "aria-pressed": String(onePage), on: {click: () => { onePage = true; render(); }}}, "One page"),
+    h("button", {class: "b", type: "button", "aria-pressed": String(!onePage), on: {click: () => { onePage = false; render(); }}}, "Two pages"),
+    h("span", {class: `tag mono ${over ? "over" : "ok"}`}, over ? `over one page by about ${lines - 66} lines · cut one to fit` : `about ${lines} lines`),
+    h("button", {class: "b", type: "button", on: {click: () => save("md")}}, "Save Markdown"),
+    h("button", {class: "b", type: "button", on: {click: () => save("html")}}, "Save HTML for PDF"),
+    h("button", {class: "b", type: "button", on: {click: () => window.print()}}, "Print"),
+    h("span", {id: "saved", class: "muted mono", role: "status"}));
+  const skills = (d.skills || []).concat((d.implied || []).filter((s) => !drop.has(s)));
+  const sec = (t, body) => body ? [h("h3", {}, t), h("p", {style: "margin:0"}, body)] : [];
+  return [h("div", {class: "paper"},
+    h("div", {style: "text-align:center;font-size:22px;font-weight:700"}, S.name || ""),
+    sec("Professional Summary", (d.summary || []).length ? h("span", {}, d.summary.map((s, i) => [sentence(s, `s${i}`), " "])) : null),
+    sec("Core Competencies", (d.competencies || []).join(" | ")), sec("Technical Skills", skills.join(" | ")),
+    h("h3", {}, "Professional Experience"),
+    d.roles.map((r) => { const ro = roleOf(r.role); return h("div", {},
+      h("div", {style: "display:flex;justify-content:space-between;gap:12px;flex-wrap:wrap"}, h("strong", {}, titleOf(ro)), h("span", {}, `${ro.start} – ${ro.end || "Present"}`)),
+      h("div", {style: "font-style:italic"}, ro.company || ""),
+      h("ul", {}, (r.bullets || []).filter((b) => shown(r, b)).map((b) => h("li", {}, sentence(b, `${r.role}:${b.rank}`))))); }))];
+}
+async function save(format) {
+  const shownKeys = [];
+  for (const r of S.draft.roles) for (const b of r.bullets || []) if (shown(r, b)) shownKeys.push(`${r.role}:${b.rank}`);
+  const res = await fetch(`/${token}/act/save`, {method: "POST", headers: {"Content-Type": "application/json", "X-Urfluency-Page": token}, body: JSON.stringify({format, one_page: onePage, shown: shownKeys, drop: [...drop]})});
+  document.getElementById("saved").textContent = res.ok ? "Saved in your career folder; the path is in your terminal." : "Could not save.";
+}
+function render() {
+  const d = S.draft, isResume = d.kind === "resume";
+  document.getElementById("title").textContent = isResume ? "Review your resume" : "Review your LinkedIn drafts";
+  document.getElementById("layout").className = "layout" + (marks ? " marks" : "");
+  if (!isResume) document.getElementById("toolbar").replaceChildren(h("button", {class: "b", type: "button", on: {click: () => { marks = !marks; render(); }}}, marks ? "Hide highlights" : "Show highlights"));
+  document.getElementById("doc").replaceChildren(...(isResume ? resume(d) : linkedIn(d)));
+  const ev = document.getElementById("ev"), selact = document.getElementById("selact");
+  selact.replaceChildren();
+  if (sel) {
+    document.getElementById("sel").textContent = sel.s.text;
+    ev.replaceChildren(...sel.s.cites.map((c) => { const x = S.cites[c] || {kind: "git", label: c, detail: ""}; return h("div", {class: `ev ${x.kind}`}, h("strong", {}, x.label), h("span", {}, x.detail)); }));
+    if (isResume && onePage && sel.s.rank) selact.append(h("button", {class: "b", type: "button", on: {click: () => { cut.add(sel.key); restored.delete(sel.key); render(); }}}, "Cut from the one-page version"));
+  }
+  const cuts = [];
+  if (isResume && onePage) for (const r of d.roles) for (const b of r.bullets || []) if (!shown(r, b)) cuts.push(h("li", {class: "cut"}, h("span", {style: "font-size:13px"}, b.text),
+    h("button", {class: "b", type: "button", on: {click: () => { const k = `${r.role}:${b.rank}`; restored.add(k); cut.delete(k); render(); }}}, "Restore")));
+  document.getElementById("cutcard").hidden = !cuts.length;
+  document.getElementById("cuts").replaceChildren(...cuts);
+  const implied = isResume ? d.implied || [] : [];
+  document.getElementById("impliedcard").hidden = !implied.length;
+  document.getElementById("implied").replaceChildren(...implied.map((s) => h("div", {style: "display:flex;justify-content:space-between;align-items:center;gap:8px"}, h("strong", {}, s),
+    h("button", {class: "b", type: "button", "aria-pressed": String(!drop.has(s)), on: {click: () => { drop.has(s) ? drop.delete(s) : drop.add(s); render(); }}}, drop.has(s) ? "Dropped" : "Keep"))));
+  const dropped = d.dropped || [];
+  document.getElementById("droppedcard").hidden = !dropped.length;
+  document.getElementById("dropped").replaceChildren(...dropped.map((x) => h("li", {}, h("span", {}, x.text), h("span", {class: "muted"}, ` — ${x.why}`))));
+}
+fetch(`/${token}/state`).then((r) => r.json()).then((s) => { S = s; render(); });
+</script>
+</body>
+</html>

@@ -29,11 +29,16 @@ safe to run.
   across all scanned repositories. Ad-hoc safety scans keep nothing after the report
   is delivered. The one exception is a repository its owner connects for badges,
   which stores `owner/repo` and its scores, because a badge must be looked up by
-  name.
+  name. Career drafts store nothing: the pack and the draft exist on the server
+  only while the draft is written.
 - **Code and prompts never leave the machine.** Analysis runs locally. Optional
   model-assisted reviews call only a model runtime on the same machine (such as
   Ollama or LM Studio); hosted model providers are never used, so urFluency is safe
-  to run on a work laptop.
+  to run on a work laptop. The one exception is opt-in and Pro only: `urfluency
+  career draft` sends an evidence pack the user approved (redacted, with no code,
+  paths, repository names, or URLs) through urFluency to Vertex AI, and with
+  drafting on the map step sends redacted commit subjects the same way (see
+  Career profile).
 - **AI fluency is a skill, not a penalty.** Coding agents are part of how most
   engineers now work. urFluency never counts agent use against anyone; it measures
   whether agent-assisted work meets the engineer's own bar, so it can show that the
@@ -1233,6 +1238,256 @@ https://urfluency.com/badge/repo/{owner}/{repo}/safety.svg
 https://urfluency.com/badge/user/{handle}/{language}.svg
 ```
 
+## Career profile (built 2026-11-08, not yet released)
+
+Pro members can turn their own Git history into a LinkedIn profile draft (a
+headline, an About section, and one entry per role) or a resume. Decided
+2026-11-06: opt-in, Pro only, drafted by a hosted model, LinkedIn first.
+Decided 2026-11-08:
+
+- **Signed in.** Every `urfluency career` step needs a signed-in CLI, on any
+  plan: each asks `GET /v1/career` first. The steps before drafting stay free.
+- **Engine.** The analysis is the private engine's (`career` in
+  urfluency-engine): features, placement, decisions, the claim check,
+  questions, target rules, the pack, and, for the API, the prompts and the
+  checks every answer must pass. This repository's `career` package holds the
+  shared types, the LinkedIn import, and the privacy layer, so anyone can read
+  what is removed before anything is sent. The community build has no career
+  engine and says so.
+- **Vertex AI.** Gemini on Vertex AI, a Pro-tier model (`career_model` in
+  urfluency-app's Terraform), writes the drafts. With drafting on, a cheaper
+  model (`career_assist_model`) also helps the map step: it describes features from redacted commit subjects,
+  words the questions, and suggests generic names for internal ones, which
+  are sent only as tokens (`NAME1`) with the redacted text around them.
+
+The goal is accuracy, not prose. Every sentence in a draft traces to evidence
+from the user's commits or to a fact the user confirmed, and nothing is
+invented, figures least of all.
+
+**Local evidence (`urfluency career map`).** Runs in the CLI and is free; on Pro
+with drafting on, Vertex AI describes the features afterward.
+
+- **Identities.** Lists every author email in the chosen folders with its commit
+  count; the user picks theirs, since people commit from several addresses over
+  the years.
+- **Repositories.** Finds nested repositories. For each, it gathers:
+  - its purpose, from the README and the manifest's name and description fields;
+  - its first and last commits;
+  - the user's share of the commits;
+  - languages and frameworks, from manifests;
+  - the user's commit subjects, grouped into features.
+- **Left out or flagged.** Before drafting, it drops or flags:
+  - copies, such as the same history in two folders, which are kept once;
+  - clones of other projects where the user has few or no commits;
+  - vendored and generated code, as in Metrics;
+  - skeletons with little beyond scaffolding.
+
+  Line counts are never evidence of work.
+- **Secret stores.** It skips them, as everywhere (Principles). Commit subjects
+  and README text pass through the redaction below before they are shown.
+
+**Import.** `urfluency career import` reads a LinkedIn data export, all on the
+machine:
+
+- **Timeline.** `Positions.csv` gives each title, team, and dates; `Profile.csv`
+  gives the headline and About. Without an import, the user enters roles by
+  hand.
+- **Claim check.** Every claim in the current descriptions is checked against
+  the evidence and marked supported, needs an answer, conflicts (a different
+  figure in the answers, or another author's repository), or no evidence. Only
+  supported claims carry into a draft until the user settles the rest.
+- **Titles.** The CLI asks for the official title on the employment record when
+  it differs from the profile's. The official title stays first in drafts.
+
+`urfluency career target` learns the structure of a target profile, the
+user's own or an example: paragraphs per role, length range, how entries open,
+sentence shape, the order of core and cross-team work, the closing line, and
+skills per role. Only these rules go in the pack, never the target's text. The
+user can edit them in `career-target.json`.
+
+**Mapping.** Evidence goes under a role by commit date, never by folder, since
+folders get reorganized. `urfluency career map` serves a local page on
+127.0.0.1 with the timeline and asks the user to decide:
+
+- **Split repositories:** a repository whose commits cross a role boundary is
+  split at that date by default, so each role gets the work done while it was
+  held.
+- **Folder and dates disagree:** placed by date unless the user says otherwise.
+- **Personal work:** commits from a personal address outside work folders are
+  kept out of roles; the user can add them to About as a side project.
+- **Thin roles:** a role with little in Git prompts questions, or keeps the
+  current description.
+- **Internal names:** codenames found in commits and READMEs are listed with
+  generic replacements; public products (such as Kong or Backstage) are kept.
+
+Drafting needs an approved map.
+
+**Confirmation.** The CLI then asks what Git can't show, one question per item,
+and records each answer as a confirmed fact:
+
+- **Ownership:** whether a repository with a low share, or work that overlaps a
+  colleague's, was the user's.
+- **Shipping:** whether it shipped and is in use.
+- **Scale and outcomes**, in separate fields of the user's own figures. Scale
+  says how big the system is: users, accounts, sites, volume. Outcome says what
+  changed: before and after.
+- **Partners:** cross-team work, such as security, data, or another team's
+  repositories.
+- **Work Git can't see:** code review, mentoring, escalations, migrations run
+  from other repositories.
+
+An unanswered question leaves the claim out; it never becomes a guess.
+
+**Redaction.** Before upload, the CLI removes:
+
+- internal hostnames, IP addresses, and email addresses;
+- cloud project and account IDs;
+- URLs and ticket keys;
+- token-shaped strings.
+
+It replaces repository names, and internal product names the user marks, with
+generic descriptions ("an internal developer portal"). A repository name with a
+hyphen, underscore, dot, digit, or inner capital is always replaced ("the
+project"); one that is a plain word, such as "returns", is listed on the map
+page and kept unless the user generalizes it, since replacing an ordinary word
+would garble every sentence it appears in. Redaction is in this
+public repository so anyone can read what it removes.
+
+What remains is the evidence pack: roles, each role's features in plain words,
+technologies, dates, shares, and confirmed facts. It has no code, diffs, file
+paths, repository names, or URLs. `urfluency career show` prints the exact
+pack, and drafting needs the user to approve it.
+
+**Drafting (Pro, on the server).** `urfluency career draft` sends the approved
+pack with the upload token to `POST /career/drafts`. The API checks Pro, applies
+the limits, and calls the model with fixed instructions:
+
+- **Citations.** Every sentence cites the evidence or confirmed facts it rests
+  on. The API drops a sentence whose citations don't resolve.
+- **Figures.** They come only from confirmed facts. Money is shown as a range
+  ("eight-figure") unless the user chose exact.
+- **Credit.** No internal names. "Led", "designed", or "owned" only with a
+  confirmed fact behind it. No credit for another person's work.
+- **LinkedIn limits.** Headline 220 characters, About 2,600, each role 2,000.
+- **Structure.** Each entry follows the target rules in the pack. Without a
+  target, the default is two dense paragraphs of verb-led sentences (the work,
+  then cross-team work), a "further areas" line, and four skills.
+- **Titles.** The official title, with an optional note in parentheses for the
+  work done ("Technical Analyst (Software Engineer)"), because background checks
+  verify titles.
+
+The CLI writes the drafts to a local file, and `urfluency career review`
+serves them on 127.0.0.1 as continuous paragraphs. Each sentence is marked
+"from your commits" or "includes your answer", and clicking it shows its
+citations; a check against the target rules sits beside each entry. urFluency deletes the pack and
+the drafts once the response is delivered, like a scan report. Saving drafts on
+the site would be a later opt-in.
+
+**Resume output.** `urfluency career draft --resume` reuses the same
+approved map, confirmed facts, and redacted pack, with resume rules in place of
+LinkedIn's:
+
+- **Sections:** a professional summary of three to five sentences; core
+  competencies and technical skills as `|`-separated lists; and, for each
+  role, the official title, team, dates, and bullets.
+- **Bullets:** each starts with a verb, has no "I", and runs one or two lines.
+  Each bullet cites its evidence, the same as a LinkedIn sentence. Scale and
+  outcome go first, and current roles use present tense.
+- **Skills:** listed only from manifests, the languages in Metrics, and
+  confirmed facts. A skill the work implies but the evidence doesn't name
+  (SQL behind BigQuery, say) is marked for the user to keep or drop.
+  Competencies stay broad, and tools go under technical skills, so the two
+  lists don't repeat each other.
+- **Length:** one or two pages. Every bullet is ranked by its evidence: scale,
+  outcome, ownership, then recency. A shorter version keeps the top ones, and
+  `review --resume` shows what was cut so the user can bring it back.
+- **Roles:** the same placement by commit date. The resume can't credit a role
+  with work its commits put in another role.
+- **Structure:** `career target` also accepts a resume, whose sections, order,
+  and bullet counts become the rules. As with LinkedIn, only the rules are
+  sent, never the text.
+- **Files:** the review page saves Markdown, and HTML laid out to print to PDF,
+  on the user's machine with no model. Layouts are plain and single-column so
+  applicant tracking systems can read them. DOCX waits for a pure-Go library
+  worth the dependency.
+
+It uses the same Pro drafts and limits as LinkedIn: one run writes the LinkedIn
+entries or the resume, not both. It ships after LinkedIn drafting.
+
+**Limits.** Drafting is Pro only, with:
+
+- a weekly draft cap per account;
+- a pack size limit;
+- the spend kill switch that already covers hosted scans.
+
+Measure the cost per draft before launch.
+
+**On the site.** The signed-in profile gets a Career tab, not a Settings entry,
+because the import is per run input rather than an account preference. The tab
+holds the opt-in switch (off by default, with the employment-agreement notice
+before it turns on), the drafts left this week, how to download the LinkedIn
+export, and the commands in order. It has no upload: the export also holds
+messages and contacts, the claim check needs local Git evidence, and the CLI
+reads only `Positions.csv` and `Profile.csv`. `POST /v1/career/drafts` and
+`POST /v1/career/assist` refuse accounts that aren't on Pro or haven't opted
+in, and both pause with the budget's kill switch.
+
+**Limits as built.** Three drafts and ten map-step assists a week per
+account, counted once Vertex answers, whether or not the answer passes the
+checks, since either is paid for; a failed request isn't counted. Five tries a
+day of each per account, counted before the call, bound calls started at once
+and failed requests; 100 Vertex calls a day across everyone; packs up to 256 KB. Drafts use a Pro-tier model
+(`gemini-3.1-pro-preview`, about $0.10 to $0.25 a typical draft and $0.50 at
+the caps); assists use Flash-Lite, a few cents each. A Pro account's worst
+month is then about $7.50 of its $10. The API logs each call's token counts,
+never its text, to check these figures after launch.
+
+**Keeping unusable drafts rare.** Since an unusable answer counts, the checks
+repair before they drop, and the prompt names every check. A pack with no
+role features or answers is refused before any call. Citations are trimmed,
+lowercased, and cleared of IDs the pack lacks; a resume bullet opening with
+"I" is made verb-led; the digits of technology names and versions (S3, IPv6,
+OAuth 2.0) aren't figures. Sentences that still fail are dropped one by one,
+so a draft is unusable only when no role entry survives, or Vertex's answer
+is cut off or not JSON. Gemini 3 runs at its default temperature, as Google
+recommends: lower ones can loop until the output cap.
+
+**Local pages.** The map and review pages are served by the CLI on 127.0.0.1
+at a random port, under a random token that every request must carry; changes
+also need it in a header other sites can't send, and the Host must be the
+listener's own address, against DNS rebinding. The pages build the DOM from
+text only, since commit subjects and READMEs are untrusted.
+
+**Accuracy check.** Before release, run against a history whose attributions
+were checked by hand. It includes:
+
+- colleagues' copies of repositories;
+- an empty skeleton;
+- work that falls in a different role than its folder suggests;
+- figures that exist only in the user's memory.
+
+The drafts must credit none of the others' work, contain no figure the user
+didn't confirm, and put every item in the right role.
+
+**Principle change.** This is the first feature that sends text about the
+user's work, not just scores, to a hosted model. Two Principles gained a
+stated exception (2026-11-08), as "Only scores are stored" has for badges:
+
+- **"Code and prompts never leave the machine"**, whose hosted-model rule this
+  breaks: the opt-in career draft sends a redacted, user-approved evidence pack
+  through urFluency to a hosted model.
+- **"Only scores are stored"**: the pack is sent but not kept.
+
+The employment-agreement notice matters most here, since the drafts describe
+work done for an employer.
+
+**Release order.** Every step needs `GET /v1/career`, so the app ships first:
+
+1. The app: the career endpoints, the Career tab, and `career_model`.
+2. The CLI, with the `career` package, the command, and the pages.
+3. The engine, on that CLI release, with the career analysis; then the
+   official build, and the app's engine bump for the prompts and checks.
+
 ## API
 
 Base URL `https://api.urfluency.com/v1`. Public endpoints return only what the user or
@@ -1328,6 +1583,9 @@ The first plan, kept for its reasoning. The service stores its data in Firestore
    charged by scan time and download.
 8. **Next:** dynamic scanning, more languages, and calibrating the proficiency
    model against outcomes.
+9. **Career profile** (proposed 2026-11-06): local evidence and confirmation in
+   the CLI, then LinkedIn drafts on Pro, then resume output from the same
+   evidence. See Career profile.
 
 ## Open decisions
 
@@ -1336,5 +1594,13 @@ scan isolation (Cloud Run jobs in a locked-down network, 2026-10-28).
 
 - Exact score formula per category and the minimum sample for a band.
 - Whether model-assisted review is offered in the hosted scanner, and its cost limits.
+- Career profile:
+  - whether Vertex AI's data terms (no training on prompts; abuse-monitoring
+    retention) fit "sent but not kept", and whether to request
+    zero data retention for the project;
+  - whether three drafts a week is right, once the cost per draft is measured;
+  - whether drafts can be saved on the site;
+  - the resume import format;
+  - DOCX output, and a direct PDF without the browser's print.
 - Languages after the current sixteen, shell scripts without a `.sh` or `.bash` extension (found by their `#!` line), and F# and Visual Basic for .NET.
 

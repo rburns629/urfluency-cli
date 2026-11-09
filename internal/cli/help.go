@@ -22,6 +22,11 @@ Share your results (optional)
   status                    Show the login, when it expires, and your plan
   logout                    Delete the upload token on this machine
 
+Career profile (signed in; drafting on Pro)
+  career STEP               Turn your own commits into cited LinkedIn and resume
+                            drafts: import, target, map, questions, show, draft,
+                            review
+
 Before running someone else's code
   check URL|PATH            Look for signs of malicious behavior; runs nothing
 
@@ -84,6 +89,39 @@ Examples:
   urfluency scan ~/Projects
   urfluency scan --since all --exclude 'Archive*' ~/Projects
   urfluency scan --no-git ~/Private
+`,
+	"career": `Usage: urfluency career STEP [flags]
+
+Turns your own Git history into LinkedIn and resume drafts in which every
+sentence cites your commits or an answer you gave. Every step needs a
+signed-in account (urfluency login, free). The steps before drafting run on
+your computer and are free; drafting is on Pro, with "Allow career drafts"
+turned on at urfluency.com/account/career. Needs the official build.
+
+Steps, in order:
+  import EXPORT.zip         Read your LinkedIn data export: only Positions.csv and
+                            Profile.csv (name, headline, summary) are opened
+  target [--resume] FILE    Learn the structure of a profile or resume to follow;
+                            only the rules are kept, never its text (optional)
+  map [flags] [path]        Place your commits under your roles by date and open a
+                            page on 127.0.0.1 to settle decisions and approve
+      --author EMAIL        Count an address as yours (repeatable)
+      --exclude PATTERN     Skip folders by name or path (repeatable)
+      --no-browser          Print the page's address without opening it
+  questions [--again|--list]
+                            Answer what Git can't show; skipped questions leave
+                            their claims out
+  show [--resume]           Print the exact redacted pack a draft would send
+  draft [--resume] [--yes]  Send the pack and save the cited draft (Pro)
+  review [--resume] [--no-browser]
+                            Read the draft on 127.0.0.1, see each sentence's
+                            evidence, and save a resume as Markdown or HTML
+
+On Pro with drafting on, the map step also asks Vertex AI, through urfluency.com,
+to describe features, word the questions, and suggest generic names. Internal
+names are sent only as tokens. urFluency keeps none of it once you have the
+answer. Your state is in the career folder beside settings.json, readable only
+by you.
 `,
 	"upload": `Usage: urfluency upload [flags] [path]
 

@@ -386,3 +386,48 @@ func isHex(s string) bool {
 	}
 	return true
 }
+
+// Authored is a commit's author email, time, and subject, for the career
+// evidence, which stays on the machine.
+type Authored struct {
+	Email   string
+	Time    time.Time
+	Subject string
+}
+
+// AuthoredCommits returns the non-merge commits reachable from HEAD whose
+// author email is one of emails, oldest first.
+func (r Repo) AuthoredCommits(ctx context.Context, emails []string) ([]Authored, error) {
+	args := append([]string{"log", "--no-merges", "--reverse", "--format=%ae%x1f%at%x1f%s%x1e"}, authorArgs(emails)...)
+	out, err := r.git(ctx, append(args, "HEAD")...)
+	if err != nil {
+		return nil, err
+	}
+	var commits []Authored
+	for _, rec := range strings.Split(string(out), "\x1e") {
+		fields := strings.SplitN(strings.TrimSpace(rec), "\x1f", 3)
+		if len(fields) < 3 {
+			continue
+		}
+		secs, err := strconv.ParseInt(fields[1], 10, 64)
+		if err != nil {
+			continue
+		}
+		commits = append(commits, Authored{Email: fields[0], Time: time.Unix(secs, 0).UTC(), Subject: fields[2]})
+	}
+	return commits, nil
+}
+
+// Root returns the first root commit reachable from HEAD, which copies of one
+// history share.
+func (r Repo) Root(ctx context.Context) (string, error) {
+	out, err := r.git(ctx, "rev-list", "--max-parents=0", "HEAD")
+	if err != nil {
+		return "", err
+	}
+	roots := strings.Fields(string(out))
+	if len(roots) == 0 {
+		return "", ErrNoCommits
+	}
+	return roots[len(roots)-1], nil
+}

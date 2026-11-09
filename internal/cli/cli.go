@@ -65,6 +65,8 @@ func Run(ctx context.Context, args []string, stdout, stderr io.Writer) int {
 		err = logout(args[1:], stdout)
 	case "status":
 		err = status(ctx, args[1:], stdout)
+	case "career":
+		err = careerCmd(ctx, args[1:], stdout, stderr)
 	case "attest":
 		err = attest(ctx, args[1:], stdout)
 	case "dismiss":
