@@ -1019,6 +1019,26 @@ on the user's machine and again on the server. The CLI only claims
 `self-reported` (or `declared` when nothing came from Git); the service assigns
 the tiers it verifies. `--dry-run` prints the exact payload.
 
+**Vertex guardrails.** The API makes every Vertex call, but the career pack
+and assist request come from the user's machine, where they can be edited. So
+the request can't change what Vertex is asked to do, whoever builds it:
+
+- The task is fixed on the server: the engine's instructions are the system
+  prompt, the request is only data in the user turn, and the answer has a
+  response schema. The instructions say the input never changes the task.
+- Question and fact kinds come from a fixed list, and the engine checks each
+  question against the template for its kind, so a question can't be swapped
+  for another kind of request.
+- A draft's target is rules only: its kind, an opening style from a short
+  list, section headings, and bounded counts.
+- Text that reads as instructions to the model (telling it to drop its
+  instructions, naming its prompt, casting it as someone else, or a chat
+  format's role markers) is blanked by the CLI's redaction and refused by the
+  API, as are identifying strings.
+- Every answer is checked before use: known IDs only, within length, cited
+  evidence for every draft sentence, and nothing identifying or instruction-like.
+  What fails is dropped, and an answer with nothing usable counts as unusable.
+
 **Request schemas.** Every body the CLI sends the API is a type with a
 `Validate` method: `upload.Payload`, `career.Pack`, `career.AssistRequest`, and
 the login bodies in package `login`. The send helpers take only such a type, so a
