@@ -37,7 +37,7 @@ func ReadExport(zipPath string) (Profile, error) {
 		}
 	}
 	if positions == nil {
-		return Profile{}, errors.New("the export has no Positions.csv; request it again with your profile data selected")
+		return Profile{}, errors.New("the export has no Positions.csv, which only the larger data archive includes: on LinkedIn, Get a copy of your data › Download larger data archive")
 	}
 	var p Profile
 	if profile != nil {

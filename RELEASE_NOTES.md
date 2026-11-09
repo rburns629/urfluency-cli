@@ -9,6 +9,11 @@ sums up the release in one line. Each change is a bullet that starts with
 `New:`, `Improved:`, `Fixed:`, or `Security:`, written for people who use the
 CLI rather than for people who work on it.
 
+## v1.9.1 (2026-11-09)
+
+- Fixed: urfluency career import now says which LinkedIn download has your positions when given one without them. Only the larger data archive includes Positions.csv; LinkedIn no longer lets you pick profile data alone, and its smaller exports leave it out.
+- Improved: If brew upgrade urfluency stays on an older version because you installed before the tap moved to roburns/tap, run brew uninstall urfluency && brew install roburns/tap/urfluency. Your settings and sign-in are kept.
+
 ## v1.9.0 (2026-11-08)
 
 urfluency career turns your own commits into a LinkedIn profile draft.
