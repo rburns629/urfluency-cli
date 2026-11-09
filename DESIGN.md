@@ -108,8 +108,9 @@ operated, not by CLI versus website.
   repository locally: `urfluency check <git-url>` clones into a temporary directory and
   scans without executing anything.
 - **Homebrew.** `brew install roburns/tap/urfluency` installs a prebuilt binary.
-  Tagging a version runs a release workflow that builds natively on macOS (Apple
-  Silicon and Intel) and Linux (x86-64 and ARM), because tree-sitter uses cgo;
+  Tagging a version runs a release workflow that builds on macOS (Intel natively,
+  Apple Silicon cross-compiled on the same runner with Apple's clang) and Linux
+  (x86-64 and ARM, natively), because tree-sitter uses cgo;
   publishes tarballs with SHA-256 checksums to a GitHub Release; and updates the
   formula, which declares `depends_on "git"`. A separate tap repository keeps the
   install to one command and the tap tiny, and keeps release bot commits out of the

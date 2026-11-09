@@ -96,7 +96,10 @@ jobs:
     needs: verify
     strategy:
       matrix:
-        os: [macos-15, macos-15-intel, ubuntu-24.04, ubuntu-24.04-arm]
+        # The Intel Mac also builds the Apple silicon archive (below): Apple
+        # silicon runners are often unavailable for long enough to cancel the
+        # job, which happened to v1.9.1.
+        os: [macos-15-intel, ubuntu-24.04, ubuntu-24.04-arm]
     runs-on: ${{ matrix.os }}
     timeout-minutes: 30
     # The engine environment holds ENGINE_READ_TOKEN, which reads the private
@@ -131,6 +134,13 @@ jobs:
         env:
           PACKAGE: ./engine/cmd/urfluency
           EXPECT_ENGINE: official
+        run: scripts/build-release.sh "${GITHUB_REF_NAME#v}" dist
+      - name: Build the Apple silicon archive
+        if: matrix.os == 'macos-15-intel'
+        env:
+          PACKAGE: ./engine/cmd/urfluency
+          EXPECT_ENGINE: official
+          GOARCH: arm64
         run: scripts/build-release.sh "${GITHUB_REF_NAME#v}" dist
       - name: Upload archive
         uses: actions/upload-artifact@cf430e030ddbb5b0abf93d22962f4752f3646cd9 # v7.0.2
