@@ -54,6 +54,9 @@ const (
 // "Atlas".
 func Redact(s string, names map[string]string) string {
 	s = replaceNames(s, names)
+	// Text that reads as instructions to the model never leaves the machine:
+	// a commit subject or answer can't redirect what Vertex is asked to do.
+	s = instructionRe.ReplaceAllString(s, Removed)
 	s = secretRe.ReplaceAllString(s, Removed)
 	s = redactURL.ReplaceAllString(s, Removed)
 	s = redactEmail.ReplaceAllString(s, Removed)

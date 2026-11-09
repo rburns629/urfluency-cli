@@ -9,6 +9,10 @@ sums up the release in one line. Each change is a bullet that starts with
 `New:`, `Improved:`, `Fixed:`, or `Security:`, written for people who use the
 CLI rather than for people who work on it.
 
+## v1.9.3 (2026-11-09)
+
+- Security: urfluency career draft and the map step's Vertex AI help check every request against fixed question kinds and a structure-only target, and blank any text that reads as instructions to the AI model before it leaves your computer. urFluency refuses an edited request that tries to change what Vertex is asked, and checks every answer before using it.
+
 ## v1.9.2 (2026-11-09)
 
 Checks on every request the CLI sends, and a sturdier LinkedIn import. v1.9.1 had these changes but its downloads were never published, so this is the first release to ship them.

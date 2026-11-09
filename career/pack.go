@@ -6,6 +6,7 @@ import (
 	"errors"
 	"fmt"
 	"regexp"
+	"slices"
 	"strings"
 )
 
@@ -222,6 +223,9 @@ func ValidatePack(p Pack) error {
 	if p.Kind != LinkedIn && p.Kind != Resume {
 		return fmt.Errorf("career pack kind %q", p.Kind)
 	}
+	if err := validTarget(p.Target, p.Kind); err != nil {
+		return err
+	}
 	if len(p.Roles) == 0 || len(p.Roles) > 30 {
 		return errors.New("a career pack needs 1 to 30 roles")
 	}
@@ -252,6 +256,9 @@ func ValidatePack(p Pack) error {
 	for _, f := range p.Facts {
 		if !idRe.MatchString(f.ID) || (f.RoleID != "" && !roles[f.RoleID]) {
 			return fmt.Errorf("fact %q: bad ID or role", f.ID)
+		}
+		if !slices.Contains(FactKinds, f.Kind) {
+			return fmt.Errorf("fact %q: kind %q is not one of the engine's", f.ID, f.Kind)
 		}
 		if err := texts("fact "+f.ID, 600, f.Kind, f.Text); err != nil {
 			return err
@@ -299,6 +306,9 @@ func ValidateAssist(a AssistRequest) error {
 		if !idRe.MatchString(q.ID) {
 			return fmt.Errorf("question %q: bad ID", q.ID)
 		}
+		if !slices.Contains(FactKinds, q.Kind) {
+			return fmt.Errorf("question %q: kind %q is not one of the engine's", q.ID, q.Kind)
+		}
 		if err := texts("question "+q.ID, 300, q.Kind, q.Text); err != nil {
 			return err
 		}
@@ -314,7 +324,8 @@ func ValidateAssist(a AssistRequest) error {
 	return size(a)
 }
 
-// texts refuses strings that are too long or identifying.
+// texts refuses strings that are too long, identifying, or read as
+// instructions to the model.
 func texts(at string, limit int, ss ...string) error {
 	for _, s := range ss {
 		if len(s) > limit {
@@ -322,6 +333,9 @@ func texts(at string, limit int, ss ...string) error {
 		}
 		if why := identifying(s); why != "" {
 			return fmt.Errorf("%w: %s in %s", ErrIdentifying, why, at)
+		}
+		if InstructionLike(s) {
+			return fmt.Errorf("%w, in %s", ErrInstructions, at)
 		}
 	}
 	return nil
