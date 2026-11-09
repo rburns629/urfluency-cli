@@ -1,0 +1,118 @@
+<!doctype html>
+<html lang="en">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1">
+<title>Map your work · urfluency career</title>
+<style>
+:root{--bg:#F6F7F5;--card:#FFFFFF;--line:#E4E7E2;--ink:#111411;--muted:#4B524A;--faint:#6B7369;--green:#16A34A;--greenInk:#166534;--greenBg:#DCFCE7;--amberInk:#92400E;--amberBg:#FEF3C7;--redInk:#991B1B;--redBg:#FEE2E2;--blueInk:#1E40AF;--blueBg:#DBEAFE}
+*{box-sizing:border-box}
+body{margin:0;background:var(--bg);color:var(--ink);font:15px/1.5 system-ui,-apple-system,"Segoe UI",sans-serif}
+.mono{font-family:ui-monospace,SFMono-Regular,Menlo,monospace}
+header{background:var(--card);border-bottom:1px solid var(--line)}
+header div,main{max-width:1200px;margin:0 auto;padding:14px 24px}
+header div{display:flex;flex-wrap:wrap;gap:12px;justify-content:space-between;align-items:center}
+.chip{font-size:12px;padding:4px 8px;border-radius:6px;background:#F1F3EF;color:var(--muted)}
+main{display:flex;flex-direction:column;gap:16px;padding-bottom:80px}
+h1{margin:8px 0 0;font-size:26px;letter-spacing:-.02em}
+h2{margin:0;font-size:12px;font-weight:600;color:var(--faint);text-transform:uppercase;letter-spacing:.08em}
+.card{background:var(--card);border:1px solid var(--line);border-radius:14px;padding:20px;display:flex;flex-direction:column;gap:12px}
+.grid{display:grid;grid-template-columns:repeat(auto-fit,minmax(340px,1fr));gap:16px;align-items:start}
+.role{display:grid;grid-template-columns:minmax(140px,220px) 1fr;gap:12px;padding:10px 0;border-top:1px solid #F1F3EF}
+.bars{display:flex;flex-direction:column;gap:4px}
+.bar{font-size:13px;padding:4px 8px;border-radius:6px;background:var(--greenBg);color:var(--greenInk)}
+.bar.pending{background:var(--amberBg);color:var(--amberInk)}
+.decision{border:1px solid var(--line);border-radius:10px;padding:14px;display:flex;flex-direction:column;gap:8px}
+.decision.open{border-color:#FCD34D}
+.opts{display:flex;flex-wrap:wrap;gap:6px}
+button{font:inherit;font-size:14px;font-weight:600;min-height:44px;padding:0 14px;border-radius:10px;border:1px solid #D5DAD2;background:var(--card);color:var(--ink);cursor:pointer}
+button[aria-pressed="true"]{background:var(--ink);color:#fff;border-color:var(--ink)}
+button.primary{background:var(--ink);color:#fff;border-color:var(--ink)}
+button:disabled{opacity:.5;cursor:not-allowed}
+input{font:inherit;font-size:14px;min-height:40px;padding:0 10px;border:1px solid #D5DAD2;border-radius:8px;width:100%}
+table{width:100%;border-collapse:collapse;font-size:14px}
+td,th{padding:8px 6px;border-top:1px solid #F1F3EF;text-align:left;vertical-align:top}
+th{font-size:12px;color:var(--faint);font-weight:500}
+.status{display:inline-block;font-size:12px;font-weight:600;padding:3px 8px;border-radius:999px;white-space:nowrap}
+.supported{background:var(--greenBg);color:var(--greenInk)}.needs_answer{background:var(--amberBg);color:var(--amberInk)}
+.conflicts{background:var(--redBg);color:var(--redInk)}.no_evidence{background:#F1F3EF;color:var(--muted)}
+.muted{color:var(--muted);font-size:14px}
+.err{color:var(--redInk);font-weight:600}
+.row{display:grid;grid-template-columns:1fr 1fr auto;gap:8px;align-items:center}
+@media (max-width:640px){.role,.row{grid-template-columns:1fr}}
+</style>
+</head>
+<body>
+<header><div><strong class="mono">&gt;_ urfluency career map</strong><span class="chip mono">served by your CLI on 127.0.0.1 · nothing here is sent</span></div></header>
+<main>
+  <div><h1>Map your work to your roles</h1><p class="muted">Work is placed by commit date, never by folder. Settle the decisions below, check your titles and the names to generalize, then approve the map.</p></div>
+  <p id="error" class="err" role="alert" hidden></p>
+  <section class="card"><h2>Timeline</h2><div id="timeline"></div></section>
+  <div class="grid">
+    <section class="card"><h2>Needs your decision</h2><div id="decisions" style="display:flex;flex-direction:column;gap:10px"></div></section>
+    <div style="display:flex;flex-direction:column;gap:16px">
+      <section class="card"><h2>Titles</h2><p class="muted">Drafts lead with the title on your employment record, since background checks verify it. Leave it empty when your profile's title is that one.</p><div id="titles" style="display:flex;flex-direction:column;gap:10px"></div></section>
+      <section class="card"><h2>Names to generalize</h2><p class="muted">These leave your computer only as tokens such as NAME1. Drafts use the description; mark public products to keep their names.</p><div id="names" style="display:flex;flex-direction:column;gap:10px"></div></section>
+    </div>
+  </div>
+  <section class="card"><h2>Claims in your current profile</h2><p class="muted">Only supported claims carry into a draft until you answer the rest in <span class="mono">urfluency career questions</span>.</p><table><thead><tr><th scope="col">Claim</th><th scope="col">Status</th><th scope="col">Why</th></tr></thead><tbody id="claims"></tbody></table></section>
+  <section class="card" style="flex-direction:row;flex-wrap:wrap;align-items:center;justify-content:space-between"><span id="left" class="muted"></span><button id="approve" class="primary" type="button">Approve the map</button></section>
+</main>
+<script>
+const token = location.pathname.split("/")[1];
+let state = null;
+function h(tag, props, ...kids) {
+  const el = document.createElement(tag);
+  for (const [k, v] of Object.entries(props || {})) {
+    if (k === "on") for (const [ev, fn] of Object.entries(v)) el.addEventListener(ev, fn);
+    else if (k === "class") el.className = v;
+    else el.setAttribute(k, v);
+  }
+  for (const kid of kids.flat()) if (kid != null) el.append(typeof kid === "string" ? document.createTextNode(kid) : kid);
+  return el;
+}
+async function act(action, body) {
+  const res = await fetch(`/${token}/act/${action}`, {method: "POST", headers: {"Content-Type": "application/json", "X-Urfluency-Page": token}, body: JSON.stringify(body)});
+  const data = await res.json();
+  const err = document.getElementById("error");
+  if (!res.ok) { err.textContent = data.error; err.hidden = false; return; }
+  err.hidden = true;
+  if (action === "approve") { document.querySelector("main").replaceChildren(h("section", {class: "card"}, h("h1", {}, "Map approved"), h("p", {class: "muted"}, "Close this tab and run: urfluency career questions"))); return; }
+  state = data; render();
+}
+const month = (t) => new Date(t).toLocaleDateString(undefined, {month: "short", year: "numeric"});
+function render() {
+  const m = state.map, repos = Object.fromEntries(state.repos.map((r) => [r.id, r]));
+  const pending = new Set(m.decisions.filter((d) => d.choice < 0).map((d) => d.repo));
+  const tl = document.getElementById("timeline");
+  tl.replaceChildren(...m.roles.map((r) => h("div", {class: "role"},
+    h("div", {}, h("strong", {}, r.official || r.title), h("div", {class: "muted mono"}, `${r.start} – ${r.end || "now"}`)),
+    h("div", {class: "bars"}, m.placements.filter((p) => p.role === r.id).map((p) =>
+      h("span", {class: "bar" + (pending.has(p.repo) ? " pending" : "")}, `${repos[p.repo].name} · ${p.commits} commits · ${month(p.start)} – ${month(p.end)}`))))));
+  const side = m.placements.filter((p) => p.role === "side");
+  if (side.length) tl.append(h("div", {class: "role"}, h("strong", {}, "Side projects (About)"), h("div", {class: "bars"}, side.map((p) => h("span", {class: "bar"}, `${repos[p.repo].name} · ${p.commits} commits`)))));
+  document.getElementById("decisions").replaceChildren(...(m.decisions.length ? m.decisions.map((d) => h("div", {class: "decision" + (d.choice < 0 ? " open" : "")},
+    h("strong", {}, d.title), h("span", {class: "muted"}, d.detail),
+    h("div", {class: "opts"}, d.options.map((o, i) => h("button", {type: "button", "aria-pressed": String(d.choice === i), on: {click: () => act("decide", {id: d.id, choice: i})}},
+      o + (i === d.recommended ? " (recommended)" : "")))))) : [h("p", {class: "muted"}, "Nothing to decide.")]));
+  document.getElementById("titles").replaceChildren(...m.roles.map((r) => {
+    const off = h("input", {value: r.official || "", placeholder: "Official title, if different", "aria-label": `Official title for ${r.title}`});
+    const note = h("input", {value: r.note || "", placeholder: "Note, such as Software Engineer", "aria-label": `Note for ${r.title}`});
+    return h("div", {}, h("div", {class: "muted"}, `${r.title} · ${r.start}`), h("div", {class: "row"}, off, note, h("button", {type: "button", on: {click: () => act("title", {id: r.id, official: off.value, note: note.value})}}, "Save")));
+  }));
+  document.getElementById("names").replaceChildren(...(m.names.length ? m.names.map((n) => {
+    const g = h("input", {value: n.generic || "", placeholder: "an internal developer portal", "aria-label": `Generic description for ${n.found}`});
+    return h("div", {}, h("div", {}, h("strong", {}, n.found), h("span", {class: "muted mono"}, ` sent as ${n.token}`), n.confirmed ? h("span", {class: "muted"}, n.public ? " · kept as is" : " · saved") : null),
+      h("div", {class: "row"}, g, h("button", {type: "button", on: {click: () => act("name", {id: n.token, generic: g.value, public: false})}}, "Use this"),
+        h("button", {type: "button", "aria-pressed": String(!!n.public), on: {click: () => act("name", {id: n.token, generic: g.value, public: true})}}, "It's public")));
+  }) : [h("p", {class: "muted"}, "No internal names found.")]));
+  const labels = {supported: "Supported", needs_answer: "Needs an answer", conflicts: "Conflicts", no_evidence: "No evidence"};
+  document.getElementById("claims").replaceChildren(...(m.claims || []).map((c) => h("tr", {}, h("td", {}, c.text), h("td", {}, h("span", {class: "status " + c.status}, labels[c.status] || c.status)), h("td", {class: "muted"}, c.detail))));
+  document.getElementById("left").textContent = state.pending ? `${state.pending} decision${state.pending === 1 ? "" : "s"} still open.` : "Every decision is made.";
+  document.getElementById("approve").disabled = state.pending > 0;
+}
+document.getElementById("approve").addEventListener("click", () => act("approve", {}));
+fetch(`/${token}/state`).then((r) => r.json()).then((s) => { state = s; render(); });
+</script>
+</body>
+</html>

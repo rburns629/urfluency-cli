@@ -148,3 +148,22 @@ func TestHeadWithoutCommits(t *testing.T) {
 		t.Errorf("err = %v, want ErrNoCommits", err)
 	}
 }
+
+func TestAuthoredCommitsAndRoot(t *testing.T) {
+	r := testutil.NewRepo(t)
+	r.Commit("me@example.com", "2024-03-01T10:00:00Z", map[string]string{"a.go": "package a\n"})
+	r.Commit("other@example.com", "2024-03-02T10:00:00Z", map[string]string{"b.go": "package b\n"})
+	r.Commit("me@gmail.com", "2024-03-03T10:00:00Z", map[string]string{"c.go": "package c\n"})
+	repo := gitdata.Repo{Dir: r.Dir}
+	got, err := repo.AuthoredCommits(context.Background(), []string{"me@example.com", "me@gmail.com"})
+	if err != nil {
+		t.Fatal(err)
+	}
+	if len(got) != 2 || got[0].Email != "me@example.com" || got[1].Email != "me@gmail.com" || got[0].Time.Day() != 1 || got[0].Subject == "" {
+		t.Fatalf("commits = %+v", got)
+	}
+	root, err := repo.Root(context.Background())
+	if err != nil || len(root) != 40 {
+		t.Fatalf("root = %q, %v", root, err)
+	}
+}

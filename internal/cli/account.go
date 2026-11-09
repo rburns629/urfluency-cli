@@ -164,6 +164,11 @@ func postJSONWith(ctx context.Context, endpoint, token string, headers map[strin
 
 // sendJSON sends req and decodes its JSON answer, as postJSON describes.
 func sendJSON(req *http.Request, token string, headers map[string]string, out any) (int, string, error) {
+	return sendJSONVia(httpClient, req, token, headers, out)
+}
+
+// sendJSONVia is sendJSON with another client, such as one that waits longer.
+func sendJSONVia(client *http.Client, req *http.Request, token string, headers map[string]string, out any) (int, string, error) {
 	endpoint := req.URL.String()
 	req.Header.Set("User-Agent", "urfluency/"+Version)
 	if token != "" {
@@ -172,7 +177,7 @@ func sendJSON(req *http.Request, token string, headers map[string]string, out an
 	for k, v := range headers {
 		req.Header.Set(k, v)
 	}
-	resp, err := httpClient.Do(req)
+	resp, err := client.Do(req)
 	if err != nil {
 		return 0, "", err
 	}
@@ -222,6 +227,11 @@ func logout(args []string, stdout io.Writer) error {
 // token, signed by its key, and decodes a 2xx answer into out, as postJSON
 // does.
 func signedJSON(ctx context.Context, method, endpoint string, c credentials, body, out any) (int, string, error) {
+	return signedJSONVia(ctx, httpClient, method, endpoint, c, body, out)
+}
+
+// signedJSONVia is signedJSON with another client.
+func signedJSONVia(ctx context.Context, client *http.Client, method, endpoint string, c credentials, body, out any) (int, string, error) {
 	key, err := c.privateKey()
 	if err != nil {
 		return 0, "", err
@@ -240,7 +250,7 @@ func signedJSON(ctx context.Context, method, endpoint string, c credentials, bod
 		req.Header.Set("Content-Type", "application/json")
 	}
 	signRequest(req, data, c.Token, key)
-	return sendJSON(req, "", nil, out)
+	return sendJSONVia(client, req, "", nil, out)
 }
 
 // loginRefused explains why the API refused a signed request's login.
