@@ -41,6 +41,14 @@ brew install roburns/tap/urfluency    # macOS and Linux; installs Git if missing
 urfluency doctor                        # checks dependencies; installs nothing
 ```
 
+Installed before November 2026, when the tap was `rburns629/tap`? If
+`brew upgrade urfluency` stays on an older version, reinstall from the current
+tap; your settings and sign-in are kept:
+
+```sh
+brew uninstall urfluency && brew install roburns/tap/urfluency
+```
+
 Release archives for macOS (Apple Silicon and Intel, macOS 13+) and Linux (x86-64
 and ARM, static binaries) are also attached to each
 [GitHub Release](https://github.com/roburns/urfluency-cli/releases) with a
