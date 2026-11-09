@@ -1018,6 +1018,14 @@ on the user's machine and again on the server. The CLI only claims
 `self-reported` (or `declared` when nothing came from Git); the service assigns
 the tiers it verifies. `--dry-run` prints the exact payload.
 
+**Request schemas.** Every body the CLI sends the API is a type with a
+`Validate` method: `upload.Payload`, `career.Pack`, `career.AssistRequest`, and
+the login bodies in package `login`. The send helpers take only such a type, so a
+body without a schema does not compile, and they run `Validate` before anything
+leaves the machine. The API decodes into the same types, strictly (exact names,
+nothing repeated, undeclared, or trailing), and runs the same `Validate`, so
+both ends check one definition.
+
 The first sketch, kept for the server-side scoring it describes (raw rule counts
 so scoring can improve without a CLI release):
 

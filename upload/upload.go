@@ -69,6 +69,9 @@ var (
 	sinceRe = regexp.MustCompile(`^(all|\d{4}-\d{2}-\d{2})$`)
 )
 
+// Validate is Validate(p), so a payload carries its own schema check.
+func (p Payload) Validate() error { return Validate(p) }
+
 // Validate checks a payload's versions, size, and shape, and rejects anything
 // that looks identifying: forbidden field names, email addresses, local paths,
 // or commit hashes in any string, map key, or version field.

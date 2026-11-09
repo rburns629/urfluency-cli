@@ -68,7 +68,7 @@ func newFakeAPI(t *testing.T, deny bool, uploaded chan<- *http.Request) *fakeAPI
 		challenge := f.start["code_challenge"]
 		f.mu.Unlock()
 		w.Header().Set("Content-Type", "application/json")
-		if body["code"] != "auth-code" || base64.RawURLEncoding.EncodeToString(sum[:]) != challenge {
+		if body["code"] != testAuthCode || base64.RawURLEncoding.EncodeToString(sum[:]) != challenge {
 			w.WriteHeader(http.StatusBadRequest)
 			json.NewEncoder(w).Encode(apiError{Error: "invalid_grant"})
 			return
@@ -115,7 +115,7 @@ func (f *fakeAPI) browse(link string) error {
 		return nil // the CLI waits until the login expires
 	}
 	go func() {
-		resp, err := http.Get(redirect + "?" + url.Values{"code": {"auth-code"}, "state": {state}}.Encode())
+		resp, err := http.Get(redirect + "?" + url.Values{"code": {testAuthCode}, "state": {state}}.Encode())
 		if err != nil {
 			f.t.Errorf("redirect to the CLI: %v", err)
 			return
@@ -171,7 +171,7 @@ func TestLoginSavesTokenPrivately(t *testing.T) {
 	if err := login(context.Background(), nil, &out); err != nil {
 		t.Fatalf("login: %v", err)
 	}
-	if !strings.Contains(out.String(), "connect?request=req-1") || strings.Contains(out.String(), "upload-token") || strings.Contains(out.String(), "auth-code") {
+	if !strings.Contains(out.String(), "connect?request=req-1") || strings.Contains(out.String(), "upload-token") || strings.Contains(out.String(), testAuthCode) {
 		t.Errorf("output should show the approval link and never the token or code:\n%s", out.String())
 	}
 	path, _ := credentialsPath()
@@ -247,7 +247,7 @@ func TestLoginWithoutBrowser(t *testing.T) {
 	openBrowser = func(string) error { t.Error("--no-browser opened a browser"); return nil }
 	defer func(old func() bool, in io.Reader) { interactive, stdin = old, in }(interactive, stdin)
 	interactive = func() bool { return true }
-	stdin = strings.NewReader("  auth-code \n")
+	stdin = strings.NewReader("  " + testAuthCode + " \n")
 	var out strings.Builder
 	if err := login(context.Background(), []string{"--no-browser"}, &out); err != nil {
 		t.Fatalf("login: %v", err)
@@ -497,7 +497,7 @@ func TestTokensDoNotFollowRedirectsToOtherOrigins(t *testing.T) {
 		http.Redirect(w, r, other.URL+"/steal", http.StatusTemporaryRedirect)
 	}))
 	defer api.Close()
-	if _, _, err := postJSON(context.Background(), api.URL+"/v1/upload", "secret-token", map[string]string{}, nil); err == nil {
+	if _, _, err := postJSON(context.Background(), api.URL+"/v1/upload", "secret-token", testBody{}, nil); err == nil {
 		t.Error("a redirect to another origin was followed")
 	}
 	if leaked.Load() {
@@ -526,9 +526,14 @@ func TestLoginAnswers(t *testing.T) {
 	srv := newFakeAPI(t, false, nil)
 	useAPI(t, srv.URL)
 	defer func(old func() bool, in io.Reader) { interactive, stdin = old, in }(interactive, stdin)
-	interactive, stdin = func() bool { return true }, strings.NewReader("someone-elses-code\n")
+	interactive, stdin = func() bool { return true }, strings.NewReader(strings.Repeat("Z", 43)+"\n")
 	if err := login(context.Background(), []string{"--no-browser"}, io.Discard); err == nil || !strings.Contains(err.Error(), "wrong or expired") {
 		t.Errorf("refused code: %v", err)
+	}
+	// A paste that isn't a login code at all is caught before it is sent.
+	stdin = strings.NewReader("someone-elses-code\n")
+	if err := login(context.Background(), []string{"--no-browser"}, io.Discard); err == nil || !strings.Contains(err.Error(), "copy it exactly") {
+		t.Errorf("malformed code: %v", err)
 	}
 	if err := login(context.Background(), []string{"--no-browser", "extra"}, io.Discard); err == nil {
 		t.Error("login accepted an argument")
@@ -541,8 +546,33 @@ func TestErrorResponsesThatAreNotJSON(t *testing.T) {
 		io.WriteString(w, "<html>Bad gateway</html>")
 	}))
 	defer srv.Close()
-	status, code, err := postJSON(context.Background(), srv.URL, "", map[string]string{}, nil)
+	status, code, err := postJSON(context.Background(), srv.URL, "", testBody{}, nil)
 	if err != nil || status != http.StatusBadGateway || code != "unexpected response" {
 		t.Errorf("got %d %q %v, want 502 and a code that says so", status, code, err)
 	}
 }
+
+// testBody is a request body whose schema check returns err.
+type testBody struct{ err error }
+
+func (b testBody) Validate() error { return b.err }
+
+// A body that fails its own schema check never leaves the machine.
+func TestInvalidBodyIsNotSent(t *testing.T) {
+	var calls atomic.Int32
+	srv := httptest.NewServer(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) { calls.Add(1) }))
+	defer srv.Close()
+	bad := testBody{errors.New("bad field")}
+	if _, _, err := postJSON(context.Background(), srv.URL, "", bad, nil); err == nil || !strings.Contains(err.Error(), "nothing was sent") {
+		t.Errorf("postJSON: err = %v", err)
+	}
+	if _, _, err := signedJSON(context.Background(), http.MethodPost, srv.URL, credentials{}, bad, nil); err == nil || !strings.Contains(err.Error(), "nothing was sent") {
+		t.Error("signedJSON sent an invalid body")
+	}
+	if n := calls.Load(); n != 0 {
+		t.Errorf("%d requests reached the API", n)
+	}
+}
+
+// testAuthCode has the shape of the login codes the API issues.
+const testAuthCode = "QUJDREVGR0hJSktMTU5PUFFSU1RVVldYWVowMTIzNDU"

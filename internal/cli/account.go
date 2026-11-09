@@ -142,15 +142,32 @@ type apiError struct {
 	Description string `json:"error_description"`
 }
 
+// payload is a request body. Every body the CLI sends the API has a schema,
+// checked here before anything leaves the machine; the API checks the same
+// schema on receipt. Taking this type, not any, means a body without one
+// does not compile.
+type payload interface{ Validate() error }
+
+// encode checks body against its schema and encodes it; a nil body is none.
+func encode(body payload) ([]byte, error) {
+	if body == nil {
+		return nil, nil
+	}
+	if err := body.Validate(); err != nil {
+		return nil, fmt.Errorf("the request failed its own checks, so nothing was sent: %w", err)
+	}
+	return json.Marshal(body)
+}
+
 // postJSON sends body as JSON and decodes a JSON response into out when the
 // status is 2xx. Otherwise it returns the status and the API's error code.
-func postJSON(ctx context.Context, endpoint, token string, body, out any) (int, string, error) {
+func postJSON(ctx context.Context, endpoint, token string, body payload, out any) (int, string, error) {
 	return postJSONWith(ctx, endpoint, token, nil, body, out)
 }
 
 // postJSONWith is postJSON with extra request headers.
-func postJSONWith(ctx context.Context, endpoint, token string, headers map[string]string, body, out any) (int, string, error) {
-	data, err := json.Marshal(body)
+func postJSONWith(ctx context.Context, endpoint, token string, headers map[string]string, body payload, out any) (int, string, error) {
+	data, err := encode(body)
 	if err != nil {
 		return 0, "", err
 	}
@@ -226,21 +243,19 @@ func logout(args []string, stdout io.Writer) error {
 // signedJSON sends body as JSON (or nothing for a GET) with the credentials'
 // token, signed by its key, and decodes a 2xx answer into out, as postJSON
 // does.
-func signedJSON(ctx context.Context, method, endpoint string, c credentials, body, out any) (int, string, error) {
+func signedJSON(ctx context.Context, method, endpoint string, c credentials, body payload, out any) (int, string, error) {
 	return signedJSONVia(ctx, httpClient, method, endpoint, c, body, out)
 }
 
 // signedJSONVia is signedJSON with another client.
-func signedJSONVia(ctx context.Context, client *http.Client, method, endpoint string, c credentials, body, out any) (int, string, error) {
-	key, err := c.privateKey()
+func signedJSONVia(ctx context.Context, client *http.Client, method, endpoint string, c credentials, body payload, out any) (int, string, error) {
+	data, err := encode(body)
 	if err != nil {
 		return 0, "", err
 	}
-	var data []byte
-	if body != nil {
-		if data, err = json.Marshal(body); err != nil {
-			return 0, "", err
-		}
+	key, err := c.privateKey()
+	if err != nil {
+		return 0, "", err
 	}
 	req, err := http.NewRequestWithContext(ctx, method, endpoint, bytes.NewReader(data))
 	if err != nil {

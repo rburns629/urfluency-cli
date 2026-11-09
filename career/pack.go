@@ -210,6 +210,9 @@ func identifying(s string) string {
 	return ""
 }
 
+// Validate is ValidatePack(p), so a pack carries its own schema check.
+func (p Pack) Validate() error { return ValidatePack(p) }
+
 // ValidatePack checks a pack's shape and refuses identifying text in any of its
 // strings.
 func ValidatePack(p Pack) error {
@@ -271,6 +274,9 @@ func ValidatePack(p Pack) error {
 	}
 	return size(p)
 }
+
+// Validate is ValidateAssist(a), so a request carries its own schema check.
+func (a AssistRequest) Validate() error { return ValidateAssist(a) }
 
 // ValidateAssist checks an assist request as ValidatePack checks a pack, and
 // refuses one whose names are anything but tokens.
