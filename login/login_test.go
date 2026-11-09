@@ -71,7 +71,7 @@ func TestTokenValidate(t *testing.T) {
 }
 
 func TestDevice(t *testing.T) {
-	for in, want := range map[string]string{"box\x1b[31m​ name ": "box [31m name", "  a\t\nb  ": "a b", strings.Repeat("x", 300): strings.Repeat("x", MaxDevice)} {
+	for in, want := range map[string]string{"box\x1b[31m\u200b name ": "box [31m name", "  a\t\nb  ": "a b", strings.Repeat("x", 300): strings.Repeat("x", MaxDevice)} {
 		got := Device(in)
 		if got != want || !validDevice(got) {
 			t.Errorf("Device(%q) = %q, want %q", in, got, want)
