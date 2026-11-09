@@ -140,12 +140,14 @@ func personal(name string) bool {
 	return strings.Contains(nameKey(name), " ")
 }
 
-// shared reports whether an author is a bot or a shared address that many
-// people commit through, which must never link identities.
+// shared reports whether an author is a bot, a shared address that many
+// people commit through, or Git's own "git stash" identity on stash commits,
+// none of which may link identities.
 func shared(a Author) bool {
 	e, n := a.Email, strings.ToLower(a.Name)
 	return e == "" || e == "noreply@github.com" || strings.Contains(e, "[bot]") || strings.Contains(n, "[bot]") ||
-		strings.HasSuffix(n, " bot") || n == "github" || n == "root" || strings.HasPrefix(e, "root@")
+		strings.HasSuffix(n, " bot") || n == "github" || n == "root" || strings.HasPrefix(e, "root@") ||
+		n == "git stash" || e == "git@stash"
 }
 
 // patterns builds the words an address of the user's would likely contain: the

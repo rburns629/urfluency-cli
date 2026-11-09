@@ -12,6 +12,7 @@ CLI rather than for people who work on it.
 ## v1.9.1 (2026-11-09)
 
 - Fixed: urfluency career import now says which LinkedIn download has your positions when given one without them. Only the larger data archive includes Positions.csv; LinkedIn no longer lets you pick profile data alone, and its smaller exports leave it out.
+- Fixed: Finding your commits no longer counts Git's own "git stash" identity as yours, which could add another person's stash commits to your work.
 - Improved: If brew upgrade urfluency stays on an older version because you installed before the tap moved to roburns/tap, run brew uninstall urfluency && brew install roburns/tap/urfluency. Your settings and sign-in are kept.
 
 ## v1.9.0 (2026-11-08)
