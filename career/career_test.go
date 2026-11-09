@@ -4,6 +4,7 @@ import (
 	"archive/zip"
 	"bytes"
 	"errors"
+	"io"
 	"os"
 	"path/filepath"
 	"strings"
@@ -333,4 +334,44 @@ func TestValidateProfile(t *testing.T) {
 			t.Errorf("%s: accepted", name)
 		}
 	}
+}
+
+// An interrupted download is reported as one, not as an export without
+// Positions.csv.
+func TestReadExportReportsADamagedDownload(t *testing.T) {
+	dir := t.TempDir()
+	full, _ := os.ReadFile(writeZip(t, dir, "full.zip", "Positions.csv", testPositions))
+	for _, name := range []string{"export.zip", "export (1).download"} {
+		p := filepath.Join(dir, name)
+		os.WriteFile(p, full[:len(full)/2], 0o600)
+		if _, _, err := ReadExport(p); err == nil || !strings.Contains(err.Error(), "incomplete or damaged") {
+			t.Errorf("%s: err = %v", name, err)
+		}
+	}
+}
+
+// Recognizing a renamed file reads its first line and nothing after it.
+func TestFirstLineStopsAtTheNewline(t *testing.T) {
+	r := &countingReader{data: []byte("FROM,TO,CONTENT\nprivate,message,text\n")}
+	header, err := firstLine(exportFile{open: func() (io.ReadCloser, error) { return io.NopCloser(r), nil }})
+	if err != nil || strings.Join(header, "|") != "FROM|TO|CONTENT" {
+		t.Fatalf("header = %v, %v", header, err)
+	}
+	if r.read != len("FROM,TO,CONTENT\n") {
+		t.Errorf("read %d bytes, want only the first line's", r.read)
+	}
+}
+
+type countingReader struct {
+	data []byte
+	read int
+}
+
+func (c *countingReader) Read(p []byte) (int, error) {
+	if c.read == len(c.data) {
+		return 0, io.EOF
+	}
+	n := copy(p, c.data[c.read:])
+	c.read += n
+	return n, nil
 }

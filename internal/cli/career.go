@@ -219,21 +219,10 @@ func careerImport(ctx context.Context, args []string, stdout io.Writer) error {
 	if err != nil {
 		return err
 	}
-	// Official titles entered on the map page survive a new import, and so do
-	// the name, headline, and summary when only Positions.csv was given.
 	var old career.Profile
 	kept := false
 	if readState("profile.json", &old) == nil {
-		if src.Profile == "" && (old.Name != "" || old.Headline != "" || old.Summary != "") {
-			p.Name, p.Headline, p.Summary, kept = old.Name, old.Headline, old.Summary, true
-		}
-		for i, pos := range p.Positions {
-			for _, o := range old.Positions {
-				if o.Title == pos.Title && o.Start == pos.Start {
-					p.Positions[i].Official, p.Positions[i].Note = o.Official, o.Note
-				}
-			}
-		}
+		p, kept = mergeImport(p, old, src.Profile != "")
 	}
 	if err := p.Validate(); err != nil {
 		return fmt.Errorf("the saved profile is not valid (%v); delete profile.json in the career folder and import again", err)
@@ -263,6 +252,26 @@ func careerImport(ctx context.Context, args []string, stdout io.Writer) error {
 	}
 	fmt.Fprintf(stdout, "Saved to %s\nNext: urfluency career map [folder with your repositories]\n", path)
 	return nil
+}
+
+// mergeImport carries what the user settled into a new import: official
+// titles entered on the map page survive, and so do the name, headline, and
+// summary when the import had no Profile.csv. It reports whether those were
+// kept.
+func mergeImport(p, old career.Profile, hasProfile bool) (career.Profile, bool) {
+	kept := false
+	p.Positions = append([]career.Position(nil), p.Positions...) // leave the caller's slice as it was
+	if !hasProfile && (old.Name != "" || old.Headline != "" || old.Summary != "") {
+		p.Name, p.Headline, p.Summary, kept = old.Name, old.Headline, old.Summary, true
+	}
+	for i, pos := range p.Positions {
+		for _, o := range old.Positions {
+			if o.Title == pos.Title && o.Start == pos.Start {
+				p.Positions[i].Official, p.Positions[i].Note = o.Official, o.Note
+			}
+		}
+	}
+	return p, kept
 }
 
 // maxTarget bounds a target file.

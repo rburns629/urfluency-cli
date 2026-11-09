@@ -11,7 +11,7 @@ CLI rather than for people who work on it.
 
 ## v1.9.1 (2026-11-09)
 
-- Improved: urfluency career import takes LinkedIn's archive under any name, the folder your computer unzipped it to, or Positions.csv alone, and finds the two files it needs even when they were renamed. Importing Positions.csv alone keeps the name, headline, and summary from your last import.
+- Improved: urfluency career import takes LinkedIn's archive under any name, the folder your computer unzipped it to, or Positions.csv alone, and finds the two files it needs even when they were renamed. Importing Positions.csv alone keeps the name, headline, and summary from your last import. An archive whose download was interrupted is now reported as damaged, rather than as one without your positions.
 - Security: urfluency career import checks the archive before using any of it: a well-formed zip whose files pass their checksums, no links or paths outside it, strict CSV with the expected columns, UTF-8 text, and fields and dates within LinkedIn's own limits. Control and text-direction characters are removed, and the saved profile is checked again whenever a later step reads it.
 - Security: Every request the CLI sends urFluency is checked against its schema before it leaves your computer, and urFluency checks the same schema when it arrives. A request that fails is never sent. urfluency login now cleans your device name before sending it, and tells you when a pasted login code isn't one.
 - Fixed: urfluency career import now says which LinkedIn download has your positions when given one without them. Only the larger data archive includes Positions.csv; LinkedIn no longer lets you pick profile data alone, and its smaller exports leave it out.

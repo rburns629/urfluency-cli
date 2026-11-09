@@ -106,6 +106,10 @@ func ReadExport(exportPath string) (Profile, ExportSources, error) {
 		case zerr == nil:
 			defer zr.Close()
 			files, err = zipFiles(zr)
+		case errors.Is(zerr, zip.ErrFormat) && looksZipped(exportPath):
+			// An interrupted download is the likeliest cause; it is not
+			// a different kind of export.
+			err = errors.New("the zip is incomplete or damaged, as an interrupted download leaves it; download it from LinkedIn again")
 		case errors.Is(zerr, zip.ErrFormat):
 			files = []exportFile{diskFile(exportPath, filepath.Base(exportPath))}
 		default:
@@ -174,6 +178,22 @@ func ReadExport(exportPath string) (Profile, ExportSources, error) {
 		return Profile{}, src, fmt.Errorf("the export: %w", err)
 	}
 	return p, src, nil
+}
+
+// looksZipped reports whether a file that would not open as a zip was meant to
+// be one: named .zip, or starting with a zip signature.
+func looksZipped(p string) bool {
+	if strings.EqualFold(filepath.Ext(p), ".zip") {
+		return true
+	}
+	f, err := os.Open(p)
+	if err != nil {
+		return false
+	}
+	defer f.Close()
+	sig := make([]byte, 2)
+	_, err = io.ReadFull(f, sig)
+	return err == nil && string(sig) == "PK"
 }
 
 // zipFiles lists a zip's files, refusing an archive too large to be an export
@@ -320,19 +340,32 @@ func pick(files []exportFile, name string, columns []string, skip *exportFile, c
 	return nil, fmt.Errorf("more than one file looks like %s (%s and %s); point the import at one", name, found[0].name, found[1].name)
 }
 
-// firstLine reads a CSV file's header row and nothing after it.
+// firstLine reads a CSV file's header row and nothing after it: a byte at a
+// time up to the first newline, at most maxHeader bytes.
 func firstLine(f exportFile) ([]string, error) {
 	rc, err := f.open()
 	if err != nil {
 		return nil, err
 	}
 	defer rc.Close()
-	buf := make([]byte, maxHeader)
-	n, err := io.ReadFull(rc, buf)
-	if err != nil && !errors.Is(err, io.ErrUnexpectedEOF) && !errors.Is(err, io.EOF) {
-		return nil, err
+	var line []byte
+	b := make([]byte, 1)
+	for len(line) < maxHeader {
+		n, err := rc.Read(b)
+		if n == 1 {
+			if b[0] == '\n' {
+				break
+			}
+			line = append(line, b[0])
+		}
+		if errors.Is(err, io.EOF) {
+			break
+		}
+		if err != nil {
+			return nil, err
+		}
 	}
-	line, _, _ := bytes.Cut(bytes.TrimPrefix(buf[:n], []byte("\xef\xbb\xbf")), []byte("\n"))
+	line = bytes.TrimPrefix(line, []byte("\xef\xbb\xbf"))
 	if !utf8.Valid(line) {
 		return nil, errors.New("not UTF-8")
 	}
