@@ -9,6 +9,13 @@ sums up the release in one line. Each change is a bullet that starts with
 `New:`, `Improved:`, `Fixed:`, or `Security:`, written for people who use the
 CLI rather than for people who work on it.
 
+## v1.9.0 (2026-11-08)
+
+urfluency career turns your own commits into a LinkedIn profile draft.
+
+- New: urfluency career builds a LinkedIn profile draft from your Git history, in which every sentence cites your commits or an answer you gave. Its steps run in order: import reads your LinkedIn data export, target optionally learns the structure of a profile to follow, map places your commits under your roles by date on a local page, questions asks what commits can't answer, show previews exactly what would be sent, draft writes the draft, and review shows it as paragraphs. Run urfluency help career for the details.
+- New: Every step needs you signed in (urfluency login, free), and the steps before draft run on your computer at no cost. draft is for Pro members who turn on career drafts at urfluency.com/account/career. It sends the redacted summary that show displays, never code, file paths, repository names, or links, through urFluency to Google's Vertex AI. Career needs the Homebrew or download build.
+
 ## v1.8.3 (2026-11-08)
 
 - Improved: The CLI's Go module is now github.com/roburns/urfluency-cli, matching its home on GitHub, and its README badges use the roburns name. Homebrew and download installs are unchanged.
