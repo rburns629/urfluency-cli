@@ -19,6 +19,8 @@ import (
 	"runtime"
 	"strings"
 	"time"
+
+	loginbody "github.com/roburns/urfluency-cli/login"
 )
 
 // `urfluency login` signs in like gcloud: it opens the website, the user
@@ -100,11 +102,11 @@ func login(ctx context.Context, args []string, stdout io.Writer) error {
 		defer stop()
 	}
 
-	device := deviceName()
+	device := loginbody.Device(deviceName())
 	var start loginStart
-	status, code, err := postJSON(ctx, base+"/v1/auth/cli", "", map[string]string{"client": "urfluency-cli", "version": Version, "device": device,
-		"code_challenge": base64.RawURLEncoding.EncodeToString(sum[:]), "code_challenge_method": "S256",
-		"public_key": base64.RawURLEncoding.EncodeToString(pub), "redirect_uri": redirect, "state": state}, &start)
+	status, code, err := postJSON(ctx, base+"/v1/auth/cli", "", loginbody.Start{Client: loginbody.Client, Version: Version, Device: device,
+		Challenge: base64.RawURLEncoding.EncodeToString(sum[:]), Method: "S256",
+		PublicKey: base64.RawURLEncoding.EncodeToString(pub), Redirect: redirect, State: state}, &start)
 	if err != nil {
 		return fmt.Errorf("start login: %w", err)
 	}
@@ -147,7 +149,11 @@ func login(ctx context.Context, args []string, stdout io.Writer) error {
 	}
 
 	var tok loginToken
-	status, code, err = postJSON(ctx, base+"/v1/auth/cli/"+url.PathEscape(start.RequestID)+"/token", "", map[string]string{"code": authCode, "code_verifier": verifier}, &tok)
+	exchange := loginbody.Token{Code: authCode, Verifier: verifier}
+	if exchange.Validate() != nil {
+		return errors.New("that is not the login code the browser showed; run urfluency login again and copy it exactly")
+	}
+	status, code, err = postJSON(ctx, base+"/v1/auth/cli/"+url.PathEscape(start.RequestID)+"/token", "", exchange, &tok)
 	switch {
 	case err != nil:
 		return fmt.Errorf("finish login: %w", err)

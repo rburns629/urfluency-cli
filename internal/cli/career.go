@@ -183,6 +183,9 @@ func loadProfile() (career.Profile, error) {
 	} else if err != nil {
 		return p, err
 	}
+	if err := p.Validate(); err != nil {
+		return p, fmt.Errorf("the saved profile is not valid (%v); import your LinkedIn export again", err)
+	}
 	return p, nil
 }
 
@@ -207,34 +210,68 @@ func loadMap(approved bool) (career.Map, career.Evidence, error) {
 
 func careerImport(ctx context.Context, args []string, stdout io.Writer) error {
 	if len(args) != 1 || strings.HasPrefix(args[0], "-") {
-		return fmt.Errorf("%w: career import takes the LinkedIn export's zip", errUsage)
+		return fmt.Errorf("%w: career import takes the LinkedIn export: its zip, the folder it unpacks to, or Positions.csv", errUsage)
 	}
 	if _, _, err := careerGate(ctx); err != nil {
 		return err
 	}
-	p, err := career.ReadExport(args[0])
+	p, src, err := career.ReadExport(args[0])
 	if err != nil {
 		return err
 	}
-	// Official titles entered on the map page survive a new import.
 	var old career.Profile
+	kept := false
 	if readState("profile.json", &old) == nil {
-		for i, pos := range p.Positions {
-			for _, o := range old.Positions {
-				if o.Title == pos.Title && o.Start == pos.Start {
-					p.Positions[i].Official, p.Positions[i].Note = o.Official, o.Note
-				}
-			}
-		}
+		p, kept = mergeImport(p, old, src.Profile != "")
+	}
+	if err := p.Validate(); err != nil {
+		return fmt.Errorf("the saved profile is not valid (%v); delete profile.json in the career folder and import again", err)
 	}
 	path, err := writeState("profile.json", p)
 	if err != nil {
 		return err
 	}
-	fmt.Fprintf(stdout, "Read %s with titles, companies, and dates, and your headline and summary.\n", count(len(p.Positions), "position"))
-	fmt.Fprintln(stdout, "Only Profile.csv and Positions.csv were opened; nothing else in the export was read, and nothing was sent.")
+	fmt.Fprintf(stdout, "Read %s with titles, companies, and dates", count(len(p.Positions), "position"))
+	read := src.Positions
+	if src.Profile != "" {
+		fmt.Fprint(stdout, ", and your headline and summary")
+		read += " and " + src.Profile
+	}
+	fmt.Fprintln(stdout, ".")
+	if kept {
+		fmt.Fprintln(stdout, "Kept your name, headline, and summary from the earlier import.")
+	}
+	verb := "was"
+	if src.Profile != "" {
+		verb = "were"
+	}
+	if src.HeadersChecked > 0 {
+		fmt.Fprintf(stdout, "Only %s %s read; to find a renamed file, only the first line of %s was checked. Nothing was sent.\n", read, verb, count(src.HeadersChecked, "other CSV file"))
+	} else {
+		fmt.Fprintf(stdout, "Only %s %s read; nothing else in the export was opened, and nothing was sent.\n", read, verb)
+	}
 	fmt.Fprintf(stdout, "Saved to %s\nNext: urfluency career map [folder with your repositories]\n", path)
 	return nil
+}
+
+// mergeImport carries what the user settled into a new import: official
+// titles entered on the map page survive, and so do the name, headline, and
+// summary when the import had no Profile.csv. It reports whether those were
+// kept.
+func mergeImport(p, old career.Profile, hasProfile bool) (career.Profile, bool) {
+	kept := false
+	p.Positions = append([]career.Position(nil), p.Positions...) // leave the caller's slice as it was
+	if !hasProfile && (old.Name != "" || old.Headline != "" || old.Summary != "") {
+		p.Name, p.Headline, p.Summary, kept = old.Name, old.Headline, old.Summary, true
+	}
+	for i, pos := range p.Positions {
+		for _, o := range old.Positions {
+			if o.Title == pos.Title && o.Start == pos.Start {
+				p.Positions[i].Official, p.Positions[i].Note = o.Official, o.Note
+			}
+		}
+	}
+	return p, kept
 }
 
 // maxTarget bounds a target file.

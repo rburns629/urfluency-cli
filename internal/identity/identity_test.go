@@ -47,6 +47,21 @@ func TestDetectWithoutSeedsInHistory(t *testing.T) {
 	}
 }
 
+// Stash commits can carry the user's address under the name "git stash", and
+// Git falls back to "git stash <git@stash>" when no identity is set. Neither
+// may link: otherwise anyone's git@stash commits would count as the user's.
+func TestDetectIgnoresGitStash(t *testing.T) {
+	authors := []Author{
+		{Name: "Ana Diaz", Email: "ana@example.com", Commits: 10, Repos: 1},
+		{Name: "git stash", Email: "ana@example.com", Commits: 2, Repos: 1},
+		{Name: "git stash", Email: "git@stash", Commits: 2, Repos: 1},
+	}
+	id := Detect([]string{"Ana Diaz"}, nil, authors)
+	if !slices.Equal(id.Emails, []string{"ana@example.com"}) || slices.Contains(id.Names, "git stash") {
+		t.Errorf("identity = %+v", id)
+	}
+}
+
 func TestNameKey(t *testing.T) {
 	for in, want := range map[string]string{"Robert L. Burns": "robert burns", "  robert   BURNS ": "robert burns", "tothex": "tothex", "": ""} {
 		if got := nameKey(in); got != want {

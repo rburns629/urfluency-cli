@@ -99,8 +99,10 @@ your computer and are free; drafting is on Pro, with "Allow career drafts"
 turned on at urfluency.com/account/career. Needs the official build.
 
 Steps, in order:
-  import EXPORT.zip         Read your LinkedIn data export: only Positions.csv and
-                            Profile.csv (name, headline, summary) are opened
+  import EXPORT             Read LinkedIn's larger data archive: the zip under any
+                            name, the folder it unzips to, or Positions.csv alone.
+                            Only Positions.csv and Profile.csv (name, headline,
+                            summary) are read, after checks on their format
   target [--resume] FILE    Learn the structure of a profile or resume to follow;
                             only the rules are kept, never its text (optional)
   map [flags] [path]        Place your commits under your roles by date and open a

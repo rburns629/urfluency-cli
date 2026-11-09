@@ -1018,6 +1018,14 @@ on the user's machine and again on the server. The CLI only claims
 `self-reported` (or `declared` when nothing came from Git); the service assigns
 the tiers it verifies. `--dry-run` prints the exact payload.
 
+**Request schemas.** Every body the CLI sends the API is a type with a
+`Validate` method: `upload.Payload`, `career.Pack`, `career.AssistRequest`, and
+the login bodies in package `login`. The send helpers take only such a type, so a
+body without a schema does not compile, and they run `Validate` before anything
+leaves the machine. The API decodes into the same types, strictly (exact names,
+nothing repeated, undeclared, or trailing), and runs the same `Validate`, so
+both ends check one definition.
+
 The first sketch, kept for the server-side scoring it describes (raw rule counts
 so scoring can improve without a CLI release):
 
@@ -1290,8 +1298,22 @@ with drafting on, Vertex AI describes the features afterward.
 machine:
 
 - **Timeline.** `Positions.csv` gives each title, team, and dates; `Profile.csv`
-  gives the headline and About. Without an import, the user enters roles by
-  hand.
+  gives the headline and About. Only LinkedIn's larger data archive includes
+  `Positions.csv`. Without an import, the user enters roles by hand.
+- **Any name.** The export is accepted as its zip under any name, the folder it
+  unzips to, or `Positions.csv` alone. The two files are found by name, or, when
+  one was renamed, by their columns, which reads only the first line of each
+  other CSV file. More than one match is an error, never a guess. A
+  positions-only import keeps the earlier name, headline, and About.
+- **Checks before use.** The export is outside data, and nothing in it is run.
+  Before any of it is used, the zip must be well formed, its files must pass
+  their checksums, and no entry may be a link or a path leaving the export; an
+  unzipped folder's links are refused, not followed. The CSV must be strict
+  (consistent fields, proper quoting), UTF-8, within size and row limits, with
+  the expected columns. Fields must fit LinkedIn's own limits with room to
+  spare, and dates must be real months with no role ending before it starts.
+  Control and bidirectional-override characters are removed. The same checks
+  run on `profile.json` whenever a later step reads it.
 - **Claim check.** Every claim in the current descriptions is checked against
   the evidence and marked supported, needs an answer, conflicts (a different
   figure in the answers, or another author's repository), or no evidence. Only

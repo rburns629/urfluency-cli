@@ -227,3 +227,28 @@ func TestQuestionKeyIgnoresFigures(t *testing.T) {
 		t.Error("questions about different features share a key")
 	}
 }
+
+// A new import keeps official titles from the map page, and keeps the name,
+// headline, and summary when it brought no Profile.csv of its own.
+func TestMergeImport(t *testing.T) {
+	old := career.Profile{Name: "Jane Doe", Headline: "Engineer", Summary: "About me",
+		Positions: []career.Position{{ID: "r1", Title: "Engineer", Start: "2020-01", Official: "Software Engineer II", Note: "Platform"}}}
+	positionsOnly := career.Profile{Positions: []career.Position{{ID: "r1", Title: "Engineer", Start: "2020-01"}, {ID: "r2", Title: "Lead", Start: "2023-01"}}}
+
+	got, kept := mergeImport(positionsOnly, old, false)
+	if !kept || got.Name != "Jane Doe" || got.Headline != "Engineer" || got.Summary != "About me" {
+		t.Errorf("positions only: kept %v, profile %+v", kept, got)
+	}
+	if got.Positions[0].Official != "Software Engineer II" || got.Positions[0].Note != "Platform" || got.Positions[1].Official != "" {
+		t.Errorf("official titles = %+v", got.Positions)
+	}
+	if positionsOnly.Positions[0].Official != "" {
+		t.Error("mergeImport changed the profile it was given")
+	}
+
+	full := positionsOnly
+	full.Name, full.Headline = "Jane Q. Doe", "Staff Engineer"
+	if got, kept := mergeImport(full, old, true); kept || got.Name != "Jane Q. Doe" || got.Headline != "Staff Engineer" || got.Summary != "" {
+		t.Errorf("with Profile.csv: kept %v, profile %+v", kept, got)
+	}
+}
