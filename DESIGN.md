@@ -1290,8 +1290,22 @@ with drafting on, Vertex AI describes the features afterward.
 machine:
 
 - **Timeline.** `Positions.csv` gives each title, team, and dates; `Profile.csv`
-  gives the headline and About. Without an import, the user enters roles by
-  hand.
+  gives the headline and About. Only LinkedIn's larger data archive includes
+  `Positions.csv`. Without an import, the user enters roles by hand.
+- **Any name.** The export is accepted as its zip under any name, the folder it
+  unzips to, or `Positions.csv` alone. The two files are found by name, or, when
+  one was renamed, by their columns, which reads only the first line of each
+  other CSV file. More than one match is an error, never a guess. A
+  positions-only import keeps the earlier name, headline, and About.
+- **Checks before use.** The export is outside data, and nothing in it is run.
+  Before any of it is used, the zip must be well formed, its files must pass
+  their checksums, and no entry may be a link or a path leaving the export; an
+  unzipped folder's links are refused, not followed. The CSV must be strict
+  (consistent fields, proper quoting), UTF-8, within size and row limits, with
+  the expected columns. Fields must fit LinkedIn's own limits with room to
+  spare, and dates must be real months with no role ending before it starts.
+  Control and bidirectional-override characters are removed. The same checks
+  run on `profile.json` whenever a later step reads it.
 - **Claim check.** Every claim in the current descriptions is checked against
   the evidence and marked supported, needs an answer, conflicts (a different
   figure in the answers, or another author's repository), or no evidence. Only
