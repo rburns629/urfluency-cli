@@ -1,6 +1,6 @@
 module github.com/roburns/urfluency-cli
 
-go 1.27.3
+go 1.27.4
 
 require (
 	github.com/UserNobody14/tree-sitter-dart v0.0.0-20261018035034-0038280b774b

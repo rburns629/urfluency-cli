@@ -28,8 +28,7 @@ type Blobs struct {
 // OpenBlobs starts the cat-file process, with the same safe configuration as
 // every other git command here.
 func (r Repo) OpenBlobs(ctx context.Context) (*Blobs, error) {
-	full := append(append(r.base(), safeConfig...), "cat-file", "--batch")
-	cmd := exec.CommandContext(ctx, "git", full...)
+	cmd := r.command(ctx, "cat-file", "--batch")
 	in, err := cmd.StdinPipe()
 	if err != nil {
 		return nil, err

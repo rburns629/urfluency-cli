@@ -52,7 +52,7 @@ brew uninstall urfluency && brew install roburns/tap/urfluency
 Release archives for macOS (Apple Silicon and Intel, macOS 13+) and Linux (x86-64
 and ARM, static binaries) are also attached to each
 [GitHub Release](https://github.com/roburns/urfluency-cli/releases) with a
-`checksums.txt`. To build from source you need Go 1.27.3 or later, a C compiler
+`checksums.txt`. To build from source you need Go 1.27.4 or later, a C compiler
 (for tree-sitter), and Git: `go build -o urfluency ./cmd/urfluency`.
 
 `urfluency doctor` checks Git by capability, lists the agent sessions `--sessions`
