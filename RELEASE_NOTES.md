@@ -9,6 +9,11 @@ sums up the release in one line. Each change is a bullet that starts with
 `New:`, `Improved:`, `Fixed:`, or `Security:`, written for people who use the
 CLI rather than for people who work on it.
 
+## v1.9.4 (2026-11-12)
+
+- Security: Scanning a folder no longer lets that folder's own Git settings run a program. A folder you did not create with git clone, such as a downloaded archive that includes its .git directory, could name a program in .git/config that Git then ran during urfluency scan, upload, and career. Every Git command the CLI runs now overrides those settings. Update before scanning folders from other people. urfluency check on a repository URL was not affected.
+- Security: Built with Go 1.27.4, which fixes a crash in Go's web server code (GO-2026-6859).
+
 ## v1.9.3 (2026-11-09)
 
 - Security: urfluency career draft and the map step's Vertex AI help check every request against fixed question kinds and a structure-only target, and blank any text that reads as instructions to the AI model before it leaves your computer. urFluency refuses an edited request that tries to change what Vertex is asked, and checks every answer before using it.
