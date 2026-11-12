@@ -17,12 +17,37 @@ import (
 	"time"
 )
 
-// safeConfig disables repository-controlled settings that can run commands.
+// safeConfig overrides every setting a repository's own .git/config could use
+// to run a program during the read-only commands this package runs. A normal
+// clone does not copy the remote's config, but a folder from an archive or
+// from someone else can carry any config at all. Command-line -c wins over the
+// repository's file. The signature programs matter most: with
+// log.showSignature on, git log runs gpg.program for each signed commit, and
+// that can name a script inside the folder.
 var safeConfig = []string{
 	"-c", "core.hooksPath=/dev/null",
 	"-c", "core.fsmonitor=false",
 	"-c", "diff.external=",
 	"-c", "core.pager=cat",
+	"-c", "log.showSignature=false",
+	"-c", "gpg.program=false",
+	"-c", "gpg.ssh.program=false",
+	"-c", "gpg.x509.program=false",
+	"-c", "core.sshCommand=false",
+	"-c", "core.alternateRefsCommand=false",
+	"-c", "core.attributesFile=/dev/null",
+	"-c", "protocol.allow=never",
+}
+
+// hardenedFlags are added to the commands that can show commits or diffs, so
+// no signature is checked and no per-driver diff or text conversion program
+// (diff.<name>.command, diff.<name>.textconv), which config overrides cannot
+// name in advance, is run.
+var hardenedFlags = map[string][]string{
+	"log":   {"--no-show-signature", "--no-ext-diff", "--no-textconv"},
+	"show":  {"--no-show-signature", "--no-ext-diff", "--no-textconv"},
+	"diff":  {"--no-ext-diff", "--no-textconv"},
+	"blame": {"--no-textconv"},
 }
 
 // outputConfig keeps paths in git's text output literal, so they match the
@@ -47,9 +72,17 @@ func (r Repo) base() []string {
 	return []string{"-C", r.Dir}
 }
 
+// command builds a git command for this repository with the safe
+// configuration and flags. Every git call on a repository goes through it.
+func (r Repo) command(ctx context.Context, args ...string) *exec.Cmd {
+	full := append(append(r.base(), safeConfig...), outputConfig...)
+	full = append(full, args[0])
+	full = append(full, hardenedFlags[args[0]]...)
+	return exec.CommandContext(ctx, "git", append(full, args[1:]...)...)
+}
+
 func (r Repo) git(ctx context.Context, args ...string) ([]byte, error) {
-	full := append(append(append(r.base(), safeConfig...), outputConfig...), args...)
-	cmd := exec.CommandContext(ctx, "git", full...)
+	cmd := r.command(ctx, args...)
 	var stderr bytes.Buffer
 	cmd.Stderr = &stderr
 	out, err := cmd.Output()
@@ -125,8 +158,7 @@ func (r Repo) Vendored(ctx context.Context, paths []string) (map[string]bool, er
 	if len(paths) == 0 {
 		return vendored, nil
 	}
-	args := append(append(r.base(), safeConfig...), "check-attr", "-z", "--stdin", "linguist-vendored", "linguist-generated")
-	cmd := exec.CommandContext(ctx, "git", args...)
+	cmd := r.command(ctx, "check-attr", "-z", "--stdin", "linguist-vendored", "linguist-generated")
 	cmd.Stdin = strings.NewReader(strings.Join(paths, "\x00") + "\x00")
 	out, err := cmd.Output()
 	if err != nil {
